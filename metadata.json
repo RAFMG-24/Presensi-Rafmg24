@@ -1,0 +1,6 @@
+{
+  "name": "Presensi Damkar Subang",
+  "description": "Aplikasi Presensi Resmi DAMKAR Subang (Yudha Brama Jaya) berbasis verifikasi GPS radius kantor, selfie kamera depan, multi-lokasi penugasan, pengajuan izin/cuti/sakit/dinas luar, approval admin, rekapitulasi, dan audit log.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
