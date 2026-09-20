@@ -5,6 +5,9 @@ import com.example.data.local.*
 import com.example.data.model.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
@@ -17,8 +20,34 @@ class PresensiRepository(private val context: Context) {
     private val db = DamkarDatabase.getDatabase(context)
     private val dao = db.damkarDao()
 
+    private val prefs = context.getSharedPreferences("damkar_prefs", Context.MODE_PRIVATE)
+    private val KEY_LAST_MANGKIR_DATE = "last_mangkir_checked_date"
+
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
     private val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+
+    private val _mangkirCheckedToday = MutableStateFlow(isMangkirCheckedTodayInternal())
+    val mangkirCheckedToday: StateFlow<Boolean> = _mangkirCheckedToday.asStateFlow()
+
+    private fun isMangkirCheckedTodayInternal(): Boolean {
+        val todayStr = dateFormat.format(Date())
+        return prefs.getString(KEY_LAST_MANGKIR_DATE, null) == todayStr
+    }
+
+    fun isMangkirCheckedToday(): Boolean {
+        return isMangkirCheckedTodayInternal()
+    }
+
+    fun markMangkirCheckedToday() {
+        val todayStr = dateFormat.format(Date())
+        prefs.edit().putString(KEY_LAST_MANGKIR_DATE, todayStr).apply()
+        _mangkirCheckedToday.value = true
+    }
+
+    fun resetMangkirCheckToday() {
+        prefs.edit().remove(KEY_LAST_MANGKIR_DATE).apply()
+        _mangkirCheckedToday.value = false
+    }
 
     suspend fun initializeDatabaseIfEmpty() = withContext(Dispatchers.IO) {
         val users = dao.getAllUsers().first()
@@ -49,6 +78,18 @@ class PresensiRepository(private val context: Context) {
                     dao.insertUserLocation(PegawaiLokasiEntity(superAdminId, loc.id))
                 }
             }
+        }
+        // Otomatis aktifkan pengecekan mangkir jika admin lupa dan waktu sudah pukul 23:00 WIB
+        checkAndTriggerAutoMangkirAt23()
+    }
+
+    suspend fun checkAndTriggerAutoMangkirAt23(): Boolean = withContext(Dispatchers.IO) {
+        val currentHour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
+        if (currentHour >= 23 && !isMangkirCheckedToday()) {
+            val result = runAutomaticMangkirScheduler(simulatedAfter22 = true, isAutomatic23Trigger = true)
+            result.isSuccess
+        } else {
+            false
         }
     }
 
@@ -906,7 +947,10 @@ class PresensiRepository(private val context: Context) {
             selfiePulangUrl = entity.selfiePulangUrl,
             isMockGps = entity.isMockGps,
             distanceMeters = entity.distanceMeters,
-            keterangan = entity.keterangan
+            keterangan = entity.keterangan,
+            syncStatus = entity.syncStatus,
+            integritySignature = entity.integritySignature,
+            isRooted = entity.isRooted
         )
     }
 
@@ -916,10 +960,17 @@ class PresensiRepository(private val context: Context) {
         userLon: Double,
         selfieUrl: String?,
         isMockGps: Boolean,
-        keterangan: String?
+        keterangan: String?,
+        simulatedHour: Int? = null
     ): Result<Absensi> = withContext(Dispatchers.IO) {
         val todayStr = dateFormat.format(Date())
-        val timeStr = timeFormat.format(Date())
+        val calNow = Calendar.getInstance()
+        val currentHour = simulatedHour ?: calNow.get(Calendar.HOUR_OF_DAY)
+        val timeStr = if (simulatedHour != null) {
+            String.format("%02d:%02d:%02d", simulatedHour, calNow.get(Calendar.MINUTE), calNow.get(Calendar.SECOND))
+        } else {
+            timeFormat.format(Date())
+        }
 
         if (isMockGps || com.example.util.LocationSecurityUtil.isMockGpsActive.value) {
             dao.insertActivityLog(ActivityLogEntity(
@@ -939,8 +990,30 @@ class PresensiRepository(private val context: Context) {
         }
 
         val existing = dao.getTodayAbsensi(user.id, todayStr)
+        if (existing != null && (existing.status in listOf("Izin", "Sakit", "Cuti", "Dinas Luar", "Alfa") || existing.keterangan?.startsWith("Pengajuan") == true)) {
+            return@withContext Result.failure(Exception("Anda sedang dalam periode pengajuan ${existing.status}. Absen masuk dan pulang otomatis terisi oleh sistem dan terkunci hingga tanggal selesai pengajuan."))
+        }
+
+        val userPengajuanList = dao.getPengajuanByUserId(user.id).first()
+        val activePengajuan = userPengajuanList.firstOrNull {
+            it.status != "Ditolak" && (it.tanggalMulai <= todayStr && todayStr <= it.tanggalSelesai)
+        }
+        if (activePengajuan != null) {
+            return@withContext Result.failure(Exception("Anda sedang dalam periode pengajuan ${activePengajuan.jenis} (${activePengajuan.tanggalMulai} s/d ${activePengajuan.tanggalSelesai}). Absen masuk dan pulang otomatis terisi dan terkunci hingga tanggal selesai pengajuan."))
+        }
+
         if (existing?.jamMasuk != null) {
             return@withContext Result.failure(Exception("Anda sudah melakukan Absen Masuk hari ini pada pukul ${existing.jamMasuk}."))
+        }
+
+        // Batas waktu: absen pagi baru bisa dilakukan mulai pukul 05:00 WIB
+        if (currentHour < 5) {
+            return@withContext Result.failure(Exception("Absen pagi baru bisa dilakukan mulai pukul 05:00 WIB."))
+        }
+
+        // Batas waktu absen masuk berakhir pada pukul 09:00 WIB
+        if (currentHour >= 9) {
+            return@withContext Result.failure(Exception("Batas waktu absen masuk telah berakhir pada pukul 09:00 WIB. Anda tidak dapat melakukan absen masuk lagi hari ini."))
         }
 
         // Validate Radius against user's assigned locations
@@ -951,17 +1024,33 @@ class PresensiRepository(private val context: Context) {
 
         val closest = radiusResult.closestLokasi!!
 
-        // Determine Status based on jamMasuk and toleransi
-        // Jam Masuk e.g. 07:30, toleransi 15 min -> 07:45 limit
+        // Determine Status based on jamMasuk, toleransi, dan aturan kesiangan (08.00-08.59)
         val parts = closest.jamMasuk.split(":")
         val targetHour = parts.getOrNull(0)?.toIntOrNull() ?: 7
         val targetMinute = parts.getOrNull(1)?.toIntOrNull() ?: 30
         val limitMinutes = targetHour * 60 + targetMinute + closest.toleransiMenit
 
-        val calNow = Calendar.getInstance()
-        val currentMinutes = calNow.get(Calendar.HOUR_OF_DAY) * 60 + calNow.get(Calendar.MINUTE)
+        val currentMinutes = currentHour * 60 + calNow.get(Calendar.MINUTE)
 
-        val status = if (currentMinutes > limitMinutes) "Terlambat" else "Hadir"
+        val status: String
+        val computedKeterangan: String
+
+        if (currentHour == 8) {
+            // Ketika pegawai absen di atas pukul 8.00 - 08.59 keterangan Kesiangan
+            status = "Kesiangan"
+            computedKeterangan = "Kesiangan"
+        } else if (currentMinutes > limitMinutes) {
+            status = "Terlambat"
+            computedKeterangan = keterangan ?: "Terlambat (absen pukul $timeStr)"
+        } else {
+            status = "Hadir"
+            computedKeterangan = keterangan ?: "Absen Masuk Berhasil ($status)"
+        }
+
+        val isDeviceRooted = com.example.util.LocationSecurityUtil.isDeviceRooted()
+        val signature = com.example.util.LocationSecurityUtil.generateOfflineRecordSignature(
+            user.id, user.nip, System.currentTimeMillis(), userLat, userLon
+        )
 
         val entity = AbsensiEntity(
             id = existing?.id ?: 0,
@@ -983,7 +1072,10 @@ class PresensiRepository(private val context: Context) {
             selfiePulangUrl = existing?.selfiePulangUrl,
             isMockGps = false,
             distanceMeters = radiusResult.distanceMeters,
-            keterangan = keterangan ?: "Absen Masuk Berhasil ($status)"
+            keterangan = computedKeterangan,
+            syncStatus = "SYNCED",
+            integritySignature = signature,
+            isRooted = isDeviceRooted
         )
 
         val id = if (existing != null) {
@@ -999,7 +1091,7 @@ class PresensiRepository(private val context: Context) {
             userName = user.name,
             role = user.role,
             action = "Absen Masuk",
-            details = "Absen masuk di ${closest.namaLokasi} (${radiusResult.distanceMeters}m) status: $status",
+            details = "Absen masuk di ${closest.namaLokasi} (${radiusResult.distanceMeters}m) status: $status [Root=$isDeviceRooted]",
             ipAddress = "10.0.2.16",
             device = "Android Device",
             tanggal = todayStr,
@@ -1025,7 +1117,10 @@ class PresensiRepository(private val context: Context) {
             lokasiNama = closest.namaLokasi,
             selfieMasukUrl = entity.selfieMasukUrl,
             distanceMeters = radiusResult.distanceMeters,
-            keterangan = entity.keterangan
+            keterangan = entity.keterangan,
+            syncStatus = entity.syncStatus,
+            integritySignature = entity.integritySignature,
+            isRooted = entity.isRooted
         ))
     }
 
@@ -1035,10 +1130,21 @@ class PresensiRepository(private val context: Context) {
         userLon: Double,
         selfieUrl: String?,
         isMockGps: Boolean,
-        keterangan: String?
+        keterangan: String?,
+        simulatedHour: Int? = null,
+        simulatedMinute: Int? = null,
+        simulatedDayOfWeek: Int? = null
     ): Result<Absensi> = withContext(Dispatchers.IO) {
         val todayStr = dateFormat.format(Date())
-        val timeStr = timeFormat.format(Date())
+        val calNow = Calendar.getInstance()
+        val currentHour = simulatedHour ?: calNow.get(Calendar.HOUR_OF_DAY)
+        val currentMinute = simulatedMinute ?: calNow.get(Calendar.MINUTE)
+        val dayOfWeek = simulatedDayOfWeek ?: calNow.get(Calendar.DAY_OF_WEEK)
+        val timeStr = if (simulatedHour != null) {
+            String.format("%02d:%02d:%02d", simulatedHour, currentMinute, calNow.get(Calendar.SECOND))
+        } else {
+            timeFormat.format(Date())
+        }
 
         if (isMockGps || com.example.util.LocationSecurityUtil.isMockGpsActive.value) {
             dao.insertActivityLog(ActivityLogEntity(
@@ -1060,6 +1166,18 @@ class PresensiRepository(private val context: Context) {
         val existing = dao.getTodayAbsensi(user.id, todayStr)
             ?: return@withContext Result.failure(Exception("Anda belum melakukan Absen Masuk hari ini."))
 
+        if (existing.status in listOf("Izin", "Sakit", "Cuti", "Dinas Luar", "Alfa") || existing.keterangan?.startsWith("Pengajuan") == true) {
+            return@withContext Result.failure(Exception("Anda sedang dalam periode pengajuan ${existing.status}. Absen masuk dan pulang otomatis terisi oleh sistem dan terkunci hingga tanggal selesai pengajuan."))
+        }
+
+        val userPengajuanList = dao.getPengajuanByUserId(user.id).first()
+        val activePengajuan = userPengajuanList.firstOrNull {
+            it.status != "Ditolak" && (it.tanggalMulai <= todayStr && todayStr <= it.tanggalSelesai)
+        }
+        if (activePengajuan != null) {
+            return@withContext Result.failure(Exception("Anda sedang dalam periode pengajuan ${activePengajuan.jenis} (${activePengajuan.tanggalMulai} s/d ${activePengajuan.tanggalSelesai}). Absen masuk dan pulang otomatis terisi dan terkunci hingga tanggal selesai pengajuan."))
+        }
+
         if (existing.jamMasuk == null) {
             return@withContext Result.failure(Exception("Anda belum melakukan Absen Masuk hari ini."))
         }
@@ -1068,17 +1186,66 @@ class PresensiRepository(private val context: Context) {
             return@withContext Result.failure(Exception("Anda sudah melakukan Absen Pulang hari ini pada pukul ${existing.jamPulang}."))
         }
 
+        // Batas waktu: absen pulang baru bisa dilakukan mulai pukul 15:00 WIB
+        if (currentHour < 15) {
+            return@withContext Result.failure(Exception("Absen pulang baru bisa dilakukan mulai pukul 15:00 WIB."))
+        }
+
+        // Batas waktu absen pulang berakhir pada pukul 22:00 WIB
+        if (currentHour >= 22) {
+            return@withContext Result.failure(Exception("Batas waktu absen pulang telah berakhir pada pukul 22:00 WIB. Anda tidak dapat melakukan absen pulang lagi hari ini."))
+        }
+
         val radiusResult = validateUserLocation(userLat, userLon, user.lokasiKerjaIds)
         if (!radiusResult.isWithinRadius) {
             return@withContext Result.failure(Exception("Anda berada di luar radius kantor (${radiusResult.distanceMeters}m). Harap mendekat ke area kantor untuk absen pulang."))
         }
+
+        // Aturan Pulang Cepat:
+        // - Hari Jumat: di bawah pukul 16:00 WIB
+        // - Hari Senin, Selasa, Rabu, Kamis, Sabtu, dan Minggu: di bawah pukul 15:30 WIB
+        val isFriday = (dayOfWeek == Calendar.FRIDAY)
+        val isPulangCepat = if (isFriday) {
+            currentHour < 16
+        } else {
+            currentHour < 15 || (currentHour == 15 && currentMinute < 30)
+        }
+
+        val pulangNote = if (isPulangCepat) "Anda pulang cepat" else "Absen Pulang: $timeStr"
+        val finalKeterangan = when {
+            existing.keterangan.isNullOrBlank() -> pulangNote
+            existing.keterangan.contains("tidak absen", ignoreCase = true) -> pulangNote
+            isPulangCepat -> {
+                if (existing.keterangan.contains("Anda pulang cepat", ignoreCase = true)) {
+                    existing.keterangan
+                } else if (existing.keterangan.startsWith("Absen Masuk Berhasil")) {
+                    "Anda pulang cepat"
+                } else {
+                    "${existing.keterangan} | Anda pulang cepat"
+                }
+            }
+            else -> {
+                if (existing.keterangan.startsWith("Absen Masuk Berhasil")) {
+                    "Absen Pulang: $timeStr"
+                } else {
+                    "${existing.keterangan} | Absen Pulang: $timeStr"
+                }
+            }
+        }
+
+        val isDeviceRooted = com.example.util.LocationSecurityUtil.isDeviceRooted()
+        val signature = com.example.util.LocationSecurityUtil.generateOfflineRecordSignature(
+            user.id, user.nip, System.currentTimeMillis(), userLat, userLon
+        )
 
         val updated = existing.copy(
             jamPulang = timeStr,
             latPulang = userLat,
             longPulang = userLon,
             selfiePulangUrl = selfieUrl ?: "storage/app/public/selfie/selfie_pulang_${user.nip}.jpg",
-            keterangan = (existing.keterangan ?: "") + " | Absen Pulang: $timeStr"
+            keterangan = finalKeterangan,
+            integritySignature = signature,
+            isRooted = isDeviceRooted
         )
         dao.updateAbsensi(updated)
 
@@ -1088,7 +1255,7 @@ class PresensiRepository(private val context: Context) {
             userName = user.name,
             role = user.role,
             action = "Absen Pulang",
-            details = "Absen pulang di ${updated.lokasiNama} pada pukul $timeStr",
+            details = "Absen pulang di ${updated.lokasiNama} pada pukul $timeStr [Root=$isDeviceRooted]",
             ipAddress = "10.0.2.16",
             device = "Android Device",
             tanggal = todayStr,
@@ -1115,13 +1282,34 @@ class PresensiRepository(private val context: Context) {
             selfieMasukUrl = updated.selfieMasukUrl,
             selfiePulangUrl = updated.selfiePulangUrl,
             distanceMeters = updated.distanceMeters,
-            keterangan = updated.keterangan
+            keterangan = updated.keterangan,
+            syncStatus = updated.syncStatus,
+            integritySignature = updated.integritySignature,
+            isRooted = updated.isRooted
         ))
     }
 
-    // MANDATORY REQUIREMENT: Laravel Scheduler Mangkir/Alfa Otomatis pukul 23:59 WIB
-    suspend fun runAutomaticMangkirScheduler(): Int = withContext(Dispatchers.IO) {
+    // Fitur Cek Mangkir Otomatis: Hanya bisa dilakukan setelah pukul 22.00 WIB (atau otomatis jam 23.00 jika admin lupa)
+    suspend fun runAutomaticMangkirScheduler(
+        simulatedAfter22: Boolean = false,
+        isAutomatic23Trigger: Boolean = false
+    ): Result<Int> = withContext(Dispatchers.IO) {
+        val currentHour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
+        val isAfter22 = currentHour >= 22 || simulatedAfter22
         val todayStr = dateFormat.format(Date())
+
+        if (!isAfter22) {
+            return@withContext Result.failure(
+                IllegalStateException("Fitur cek mangkir otomatis baru dapat dilakukan setelah pukul 22:00 WIB (saat ini jam ${String.format("%02d:00", currentHour)} WIB).")
+            )
+        }
+
+        if (isMangkirCheckedToday()) {
+            return@withContext Result.failure(
+                IllegalStateException("Pengecekan mangkir otomatis untuk hari ini sudah selesai dilakukan. Fitur disembunyikan dan akan muncul kembali esok hari pukul 22:00 WIB.")
+            )
+        }
+
         val allPegawai = dao.getAllUsers().first().filter { it.role == "pegawai" && it.status == "aktif" }
         var mangkirCount = 0
 
@@ -1142,7 +1330,7 @@ class PresensiRepository(private val context: Context) {
                         keterangan = "Pengajuan ${approvedLeave.jenis} disetujui: ${approvedLeave.alasan}"
                     ))
                 } else {
-                    // Rule 1: Jika tidak ada absen masuk & pulang serta tidak ada izin/sakit/cuti/dinas luar disetujui -> Mangkir / Alfa
+                    // Rule 1: Jika tidak ada absen masuk -> Keterangan: Anda tidak absen
                     dao.insertAbsensi(AbsensiEntity(
                         userId = pegawai.id,
                         userNip = pegawai.nip,
@@ -1150,20 +1338,45 @@ class PresensiRepository(private val context: Context) {
                         unitKerjaName = pegawai.unitKerjaName,
                         tanggal = todayStr,
                         status = "Mangkir / Alfa",
-                        keterangan = "Scheduler 23:59 WIB: Tidak ada kehadiran & tanpa keterangan sah"
+                        keterangan = "Anda tidak absen"
                     ))
                     mangkirCount++
                 }
             } else if (attendance.jamMasuk != null && attendance.jamPulang == null) {
                 // Rule 2: Jika ada absen masuk tetapi tidak ada absen pulang -> Mangkir Tidak Absen Pulang
+                val ketPulang = if (isAutomatic23Trigger) " | Scheduler Otomatis 23:00 WIB: Tidak absen pulang" else " | Scheduler 22:00 WIB: Tidak absen pulang"
                 dao.updateAbsensi(attendance.copy(
                     status = "Mangkir Tidak Absen Pulang",
-                    keterangan = (attendance.keterangan ?: "") + " | Scheduler 23:59 WIB: Tidak absen pulang"
+                    keterangan = (attendance.keterangan ?: "") + ketPulang
                 ))
                 mangkirCount++
             }
         }
-        mangkirCount
+
+        // Tandai sudah selesai untuk hari ini sehingga fitur disembunyikan
+        markMangkirCheckedToday()
+
+        val logDetails = if (isAutomatic23Trigger) {
+            "Sistem otomatis mengaktifkan cek mangkir pada pukul 23:00 WIB karena admin belum melakukan pengecekan manual ($mangkirCount pegawai diperbarui). Seluruh presensi pegawai terekap."
+        } else {
+            "Cek mangkir otomatis selesai ($mangkirCount pegawai diperbarui). Fitur disembunyikan sampai besok pukul 22:00 WIB."
+        }
+
+        dao.insertActivityLog(ActivityLogEntity(
+            userId = 1L,
+            userNip = if (isAutomatic23Trigger) "SYSTEM" else "ADMIN",
+            userName = if (isAutomatic23Trigger) "Sistem Otomatis (23:00 WIB)" else "Sistem Damkar",
+            role = "system",
+            action = "Scheduler Mangkir",
+            details = logDetails,
+            ipAddress = "127.0.0.1",
+            device = "Server DAMKAR",
+            tanggal = todayStr,
+            waktu = timeFormat.format(Date()),
+            timestamp = System.currentTimeMillis()
+        ))
+
+        Result.success(mangkirCount)
     }
 
     // --- Pengajuan (Izin, Sakit, Cuti, Dinas Luar) ---
@@ -1454,7 +1667,8 @@ class PresensiRepository(private val context: Context) {
                 it.id, it.userId, it.userNip, it.userName, it.unitKerjaName,
                 it.tanggal, it.jamMasuk, it.jamPulang, it.latMasuk, it.longMasuk,
                 it.latPulang, it.longPulang, it.status, it.lokasiId, it.lokasiNama,
-                it.selfieMasukUrl, it.selfiePulangUrl, it.isMockGps, it.distanceMeters, it.keterangan
+                it.selfieMasukUrl, it.selfiePulangUrl, it.isMockGps, it.distanceMeters, it.keterangan,
+                it.syncStatus, it.integritySignature, it.isRooted
             )
         }
     }
@@ -1465,7 +1679,8 @@ class PresensiRepository(private val context: Context) {
                 it.id, it.userId, it.userNip, it.userName, it.unitKerjaName,
                 it.tanggal, it.jamMasuk, it.jamPulang, it.latMasuk, it.longMasuk,
                 it.latPulang, it.longPulang, it.status, it.lokasiId, it.lokasiNama,
-                it.selfieMasukUrl, it.selfiePulangUrl, it.isMockGps, it.distanceMeters, it.keterangan
+                it.selfieMasukUrl, it.selfiePulangUrl, it.isMockGps, it.distanceMeters, it.keterangan,
+                it.syncStatus, it.integritySignature, it.isRooted
             )
         }
     }

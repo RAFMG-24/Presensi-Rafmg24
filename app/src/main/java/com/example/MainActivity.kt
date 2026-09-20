@@ -13,6 +13,8 @@ import androidx.compose.ui.Modifier
 import androidx.lifecycle.lifecycleScope
 import com.example.data.model.User
 import com.example.data.repository.PresensiRepository
+import com.example.ui.components.InitialPermissionDialog
+import com.example.ui.components.isAllRequiredPermissionsGranted
 import com.example.ui.screens.admin.*
 import com.example.ui.screens.auth.LoginScreen
 import com.example.ui.screens.auth.SplashScreen
@@ -45,9 +47,11 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun DamkarAppNavigation(repository: PresensiRepository) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     var screenStack by remember { mutableStateOf(listOf("splash")) }
     val currentScreen = screenStack.lastOrNull() ?: "login"
     var currentUser by remember { mutableStateOf<User?>(null) }
+    var showPermissionDialog by remember { mutableStateOf(false) }
 
     fun navigateTo(nextScreen: String) {
         if (screenStack.lastOrNull() != nextScreen) {
@@ -92,6 +96,9 @@ fun DamkarAppNavigation(repository: PresensiRepository) {
                 SplashScreen(
                     onSplashFinished = {
                         replaceTop("login")
+                        if (!isAllRequiredPermissionsGranted(context)) {
+                            showPermissionDialog = true
+                        }
                     }
                 )
             }
@@ -239,6 +246,17 @@ fun DamkarAppNavigation(repository: PresensiRepository) {
                 }
             }
 
+            "admin_web_dashboard" -> {
+                if (currentUser != null) {
+                    AdminWebDashboardScreen(
+                        adminUser = currentUser!!,
+                        onBack = { navigateBack() }
+                    )
+                } else {
+                    replaceTop("login")
+                }
+            }
+
             // PEGAWAI ROUTES
             "pegawai_dashboard" -> {
                 if (currentUser != null) {
@@ -300,5 +318,13 @@ fun DamkarAppNavigation(repository: PresensiRepository) {
                 replaceTop("login")
             }
         }
+    }
+
+    if (showPermissionDialog) {
+        InitialPermissionDialog(
+            onPermissionsHandled = {
+                showPermissionDialog = false
+            }
+        )
     }
 }

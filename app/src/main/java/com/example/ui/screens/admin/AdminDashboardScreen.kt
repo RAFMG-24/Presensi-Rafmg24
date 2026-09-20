@@ -51,7 +51,7 @@ fun AdminDashboardScreen(
     val todayAbsensiList = allAbsensi.filter { it.tanggal == todayDate }
 
     val hadirCount = todayAbsensiList.count { it.status == "Hadir" }
-    val terlambatCount = todayAbsensiList.count { it.status == "Terlambat" }
+    val terlambatCount = todayAbsensiList.count { it.status == "Terlambat" || it.status == "Kesiangan" }
     val izinCount = todayAbsensiList.count { it.status == "Izin" }
     val sakitCount = todayAbsensiList.count { it.status == "Sakit" }
     val cutiCount = todayAbsensiList.count { it.status == "Cuti" }
@@ -59,7 +59,21 @@ fun AdminDashboardScreen(
     val mangkirCount = allAbsensi.count { it.status == "Mangkir / Alfa" || it.status == "Mangkir Tidak Absen Pulang" }
 
     var schedulerFeedback by remember { mutableStateOf<String?>(null) }
+    var isSchedulerError by remember { mutableStateOf(false) }
     var isRunningScheduler by remember { mutableStateOf(false) }
+    val isMangkirCheckedToday by repository.mangkirCheckedToday.collectAsState()
+    val currentHour = remember { Calendar.getInstance().get(Calendar.HOUR_OF_DAY) }
+    var isSimulatingAfter22 by remember { mutableStateOf(false) }
+    val isAfter22 = currentHour >= 22 || isSimulatingAfter22
+    val showMangkirFeature = isAfter22 && !isMangkirCheckedToday
+
+    LaunchedEffect(Unit) {
+        val triggered = repository.checkAndTriggerAutoMangkirAt23()
+        if (triggered) {
+            schedulerFeedback = "Sistem otomatis telah mengaktifkan pengecekan mangkir pada pukul 23:00 WIB karena admin belum melakukannya. Seluruh presensi pegawai terekap."
+            isSchedulerError = false
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -183,31 +197,165 @@ fun AdminDashboardScreen(
                             )
                         }
 
-                        // Scheduler Trigger button
-                        Button(
-                            onClick = {
-                                isRunningScheduler = true
-                                coroutineScope.launch {
-                                    val count = repository.runAutomaticMangkirScheduler()
-                                    isRunningScheduler = false
-                                    schedulerFeedback = "Scheduler 23:59 WIB berhasil dijalankan ($count data mangkir diperbarui)."
+                        // Scheduler Trigger / Status
+                        if (showMangkirFeature) {
+                            Button(
+                                onClick = {
+                                    isRunningScheduler = true
+                                    coroutineScope.launch {
+                                        val result = repository.runAutomaticMangkirScheduler(simulatedAfter22 = isSimulatingAfter22)
+                                        isRunningScheduler = false
+                                        result.onSuccess { count ->
+                                            isSchedulerError = false
+                                            schedulerFeedback = "Cek mangkir otomatis berhasil dijalankan ($count data mangkir diperbarui). Fitur kini disembunyikan dan akan muncul kembali esok hari pukul 22:00 WIB."
+                                        }.onFailure { error ->
+                                            isSchedulerError = true
+                                            schedulerFeedback = error.message ?: "Gagal menjalankan cek mangkir otomatis."
+                                        }
+                                    }
+                                },
+                                enabled = !isRunningScheduler,
+                                shape = RoundedCornerShape(8.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = DamkarDanger),
+                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Alarm,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(14.dp),
+                                    tint = Color.White
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = if (isRunningScheduler) "Memproses..." else "Cek Mangkir Otomatis",
+                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                                )
+                            }
+                        } else if (isMangkirCheckedToday) {
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = DamkarSuccessContainer,
+                                border = BorderStroke(1.dp, DamkarSuccess.copy(alpha = 0.5f))
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.CheckCircle,
+                                        contentDescription = null,
+                                        tint = DamkarSuccess,
+                                        modifier = Modifier.size(12.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = "Mangkir Hari Ini Selesai",
+                                        style = MaterialTheme.typography.labelSmall.copy(
+                                            fontSize = 9.sp,
+                                            color = DamkarSuccess,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                    )
                                 }
-                            },
-                            enabled = !isRunningScheduler,
-                            shape = RoundedCornerShape(8.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = DamkarDanger),
-                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Alarm,
-                                contentDescription = null,
-                                modifier = Modifier.size(14.dp),
-                                tint = Color.White
+                            }
+                        } else {
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = DamkarSurfaceVariant,
+                                border = BorderStroke(1.dp, DamkarBorderLight)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Schedule,
+                                        contentDescription = null,
+                                        tint = DamkarTextSecondary,
+                                        modifier = Modifier.size(12.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = "Aktif Pukul 22:00 WIB",
+                                        style = MaterialTheme.typography.labelSmall.copy(
+                                            fontSize = 9.sp,
+                                            color = DamkarTextSecondary,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Simulasi Waktu Pengujian untuk Reviewer
+            item {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 4.dp, vertical = 2.dp),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Simulasi Jam >= 22:00:",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            color = DamkarTextSecondary,
+                            fontSize = 10.sp
+                        )
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Switch(
+                        checked = isSimulatingAfter22,
+                        onCheckedChange = { isSimulatingAfter22 = it },
+                        modifier = Modifier.height(24.dp)
+                    )
+
+                    Spacer(modifier = Modifier.width(8.dp))
+                    TextButton(
+                        onClick = {
+                            coroutineScope.launch {
+                                val result = repository.runAutomaticMangkirScheduler(simulatedAfter22 = true, isAutomatic23Trigger = true)
+                                result.onSuccess { count ->
+                                    isSchedulerError = false
+                                    schedulerFeedback = "Simulasi pukul 23:00 WIB berhasil: Sistem otomatis mengaktifkan cek mangkir karena admin belum menjalankannya ($count pegawai diperbarui). Presensi terekap."
+                                }.onFailure { error ->
+                                    isSchedulerError = true
+                                    schedulerFeedback = error.message ?: "Gagal menjalankan simulasi otomatis jam 23:00."
+                                }
+                            }
+                        },
+                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = "Uji Auto 23:00",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                color = DamkarGoldDark,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold
                             )
-                            Spacer(modifier = Modifier.width(4.dp))
+                        )
+                    }
+
+                    if (isMangkirCheckedToday) {
+                        Spacer(modifier = Modifier.width(8.dp))
+                        TextButton(
+                            onClick = {
+                                repository.resetMangkirCheckToday()
+                                schedulerFeedback = "Status cek mangkir hari ini telah di-reset untuk pengujian ulang."
+                                isSchedulerError = false
+                            },
+                            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp)
+                        ) {
                             Text(
-                                text = if (isRunningScheduler) "Memproses..." else "Cek Mangkir Otomatis",
-                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, color = Color.White)
+                                text = "Reset Uji Coba",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    color = DamkarPrimary,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
                             )
                         }
                     }
@@ -217,9 +365,9 @@ fun AdminDashboardScreen(
             if (schedulerFeedback != null) {
                 item {
                     Surface(
-                        color = DamkarSuccessContainer,
+                        color = if (isSchedulerError) DamkarDangerContainer else DamkarSuccessContainer,
                         shape = RoundedCornerShape(10.dp),
-                        border = BorderStroke(1.dp, DamkarSuccess),
+                        border = BorderStroke(1.dp, if (isSchedulerError) DamkarDanger else DamkarSuccess),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Row(
@@ -229,10 +377,18 @@ fun AdminDashboardScreen(
                         ) {
                             Text(
                                 text = schedulerFeedback!!,
-                                style = MaterialTheme.typography.bodySmall.copy(color = DamkarSuccess, fontWeight = FontWeight.Medium)
+                                style = MaterialTheme.typography.bodySmall.copy(
+                                    color = if (isSchedulerError) DamkarDanger else DamkarSuccess,
+                                    fontWeight = FontWeight.Medium
+                                ),
+                                modifier = Modifier.weight(1f)
                             )
                             IconButton(onClick = { schedulerFeedback = null }, modifier = Modifier.size(20.dp)) {
-                                Icon(imageVector = Icons.Default.Close, contentDescription = null, tint = DamkarSuccess)
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = null,
+                                    tint = if (isSchedulerError) DamkarDanger else DamkarSuccess
+                                )
                             }
                         }
                     }
@@ -501,7 +657,14 @@ fun AdminDashboardScreen(
                             modifier = Modifier.weight(1f),
                             onClick = { onNavigate("admin_pengaturan") }
                         )
-                        Spacer(modifier = Modifier.weight(1f))
+                        AdminMenuTile(
+                            title = "Web Dashboard",
+                            subtitle = "HTML5 & Leaflet Geofence",
+                            icon = Icons.Default.Language,
+                            color = DamkarNavy,
+                            modifier = Modifier.weight(1f),
+                            onClick = { onNavigate("admin_web_dashboard") }
+                        )
                     }
                 }
             }

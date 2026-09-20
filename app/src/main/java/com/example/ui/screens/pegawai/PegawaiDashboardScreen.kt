@@ -4,6 +4,8 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
@@ -19,6 +21,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalContext
+import com.example.worker.OfflineSyncWorker
 import com.example.data.model.User
 import com.example.data.repository.PresensiRepository
 import com.example.ui.components.*
@@ -43,6 +47,8 @@ fun PegawaiDashboardScreen(
     var currentDateStr by remember { mutableStateOf("") }
 
     LaunchedEffect(Unit) {
+        // Otomatis aktifkan sistem mangkir otomatis jika admin lupa dan sudah pukul 23.00 WIB
+        repository.checkAndTriggerAutoMangkirAt23()
         while (true) {
             val now = Date()
             currentTimeStr = SimpleDateFormat("HH:mm:ss", Locale.forLanguageTag("id")).format(now)
@@ -50,6 +56,20 @@ fun PegawaiDashboardScreen(
             delay(1000)
         }
     }
+
+    val deviceHour = remember { Calendar.getInstance().get(Calendar.HOUR_OF_DAY) }
+    var simulatedHour by remember { mutableStateOf<Int?>(null) }
+    var simulatedMinute by remember { mutableStateOf<Int?>(null) }
+    var simulatedDayOfWeek by remember { mutableStateOf<Int?>(null) }
+    val effectiveHour = simulatedHour ?: deviceHour
+    val isBatasMasukBelumBuka = effectiveHour < 5
+    val isBatasMasukLewat = effectiveHour >= 9
+    val isBatasPulangBelumBuka = effectiveHour < 15
+    val isBatasPulangLewat = effectiveHour >= 22
+
+    val context = LocalContext.current
+    val isDevOptionsEnabled = remember { LocationSecurityUtil.isDeveloperOptionsEnabled(context) }
+    val isDeviceRooted = remember { LocationSecurityUtil.isDeviceRooted() }
 
     // Refresh today's attendance for this user
     val livePegawaiUser by repository.getUserByIdFlow(pegawaiUser.id).collectAsState(initial = pegawaiUser)
@@ -272,12 +292,51 @@ fun PegawaiDashboardScreen(
                                 )
                                 Spacer(modifier = Modifier.height(2.dp))
                                 Text(
-                                    text = "Terdeteksi menggunakan Fake GPS / Mock GPS. Fitur absen masuk, absen pulang, dan pengajuan izin/cuti dinonaktifkan. Silahkan matikan fake gps / mock gps nya.",
+                                    text = "Penggunaan Fake GPS terdeteksi. Presensi ditolak! Silakan matikan aplikasi Mock Location / Fake GPS untuk melanjutkan.",
                                     style = MaterialTheme.typography.bodySmall.copy(
                                         color = DamkarTextPrimary,
                                         fontSize = 12.sp,
                                         lineHeight = 16.sp
                                     )
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Banner Indikasi Developer Options / Root
+            if (isDevOptionsEnabled || isDeviceRooted) {
+                item {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(containerColor = DamkarGoldContainer.copy(alpha = 0.8f)),
+                        border = BorderStroke(1.dp, DamkarGoldDark)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Security,
+                                contentDescription = null,
+                                tint = DamkarGoldDark,
+                                modifier = Modifier.size(24.dp)
+                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column {
+                                Text(
+                                    text = "Validasi Perangkat (Audit Keamanan)",
+                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, color = DamkarGoldDark)
+                                )
+                                Text(
+                                    text = buildString {
+                                        if (isDevOptionsEnabled) append("• Opsi Pengembang (Developer Options) aktif. ")
+                                        if (isDeviceRooted) append("• Terdeteksi lingkungan modifikasi sistem (Root). ")
+                                        append("Seluruh aktivitas presensi diaudit dengan tanda tangan kriptografi.")
+                                    },
+                                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp, color = DamkarTextPrimary)
                                 )
                             }
                         }
@@ -324,6 +383,18 @@ fun PegawaiDashboardScreen(
                     border = BorderStroke(1.dp, DamkarBorderLight)
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
+                        val effectiveStatus = when {
+                            todayAbsensi?.status != null -> todayAbsensi.status
+                            myPengajuanToday != null -> myPengajuanToday.jenis
+                            isBatasMasukLewat && todayAbsensi?.jamMasuk == null -> "Anda tidak absen"
+                            else -> "Belum Absen"
+                        }
+                        val effectiveKeterangan = when {
+                            !todayAbsensi?.keterangan.isNullOrBlank() -> todayAbsensi?.keterangan
+                            isBatasMasukLewat && todayAbsensi?.jamMasuk == null -> "Anda tidak absen"
+                            else -> null
+                        }
+
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
@@ -333,7 +404,7 @@ fun PegawaiDashboardScreen(
                                 text = "Status Presensi Hari Ini",
                                 style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, color = DamkarPrimary)
                             )
-                            StatusBadge(status = todayAbsensi?.status ?: "Belum Absen")
+                            StatusBadge(status = effectiveStatus)
                         }
 
                         Spacer(modifier = Modifier.height(12.dp))
@@ -364,7 +435,66 @@ fun PegawaiDashboardScreen(
                             }
                         }
 
-                        val isDispensasi = todayAbsensi?.status in listOf("Izin", "Sakit", "Cuti", "Dinas Luar") || myPengajuanToday != null
+                        if (!effectiveKeterangan.isNullOrBlank()) {
+                            Spacer(modifier = Modifier.height(10.dp))
+                            val isKeteranganTidakAbsen = effectiveKeterangan.contains("tidak absen", ignoreCase = true) || effectiveKeterangan.contains("Mangkir", ignoreCase = true)
+                            val isKeteranganKesiangan = effectiveKeterangan.contains("Kesiangan", ignoreCase = true)
+                            val isKeteranganPulangCepat = effectiveKeterangan.contains("pulang cepat", ignoreCase = true)
+
+                            Surface(
+                                color = when {
+                                    isKeteranganTidakAbsen -> DamkarDangerContainer.copy(alpha = 0.6f)
+                                    isKeteranganKesiangan || isKeteranganPulangCepat -> DamkarGoldContainer.copy(alpha = 0.6f)
+                                    else -> DamkarSurfaceVariant
+                                },
+                                shape = RoundedCornerShape(8.dp),
+                                border = BorderStroke(
+                                    1.dp,
+                                    when {
+                                        isKeteranganTidakAbsen -> DamkarDanger.copy(alpha = 0.4f)
+                                        isKeteranganKesiangan || isKeteranganPulangCepat -> DamkarGoldDark.copy(alpha = 0.4f)
+                                        else -> DamkarBorderLight
+                                    }
+                                ),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = when {
+                                            isKeteranganTidakAbsen -> Icons.Default.Cancel
+                                            isKeteranganPulangCepat -> Icons.Default.DirectionsRun
+                                            isKeteranganKesiangan -> Icons.Default.Warning
+                                            else -> Icons.Default.Info
+                                        },
+                                        contentDescription = null,
+                                        tint = when {
+                                            isKeteranganTidakAbsen -> DamkarDanger
+                                            isKeteranganKesiangan || isKeteranganPulangCepat -> DamkarGoldDark
+                                            else -> DamkarPrimary
+                                        },
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = "Keterangan: $effectiveKeterangan",
+                                        style = MaterialTheme.typography.bodySmall.copy(
+                                            fontWeight = FontWeight.SemiBold,
+                                            fontSize = 11.sp,
+                                            color = when {
+                                                isKeteranganTidakAbsen -> DamkarDanger
+                                                isKeteranganKesiangan || isKeteranganPulangCepat -> DamkarGoldDark
+                                                else -> DamkarTextPrimary
+                                            }
+                                        )
+                                    )
+                                }
+                            }
+                        }
+
+                        val isDispensasi = todayAbsensi?.status in listOf("Izin", "Sakit", "Cuti", "Alfa", "Dinas Luar") || myPengajuanToday != null
                         val namaDispensasi = todayAbsensi?.status ?: myPengajuanToday?.jenis ?: "Izin/Cuti"
 
                         if (isDispensasi) {
@@ -391,7 +521,7 @@ fun PegawaiDashboardScreen(
                                             style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, color = DamkarTextPrimary)
                                         )
                                         Text(
-                                            text = "Anda sudah mengajukan $namaDispensasi hari ini. Sesuai aturan, pengajuan dibatasi 1x per hari dan presensi harian otomatis tercatat.",
+                                            text = "Anda sedang dalam masa pengajuan $namaDispensasi. Absen masuk dan pulang otomatis terisi oleh sistem dan terkunci hingga tanggal selesai pengajuan.",
                                             style = MaterialTheme.typography.bodySmall.copy(color = DamkarTextSecondary, fontSize = 11.sp)
                                         )
                                     }
@@ -474,16 +604,267 @@ fun PegawaiDashboardScreen(
                                 label = { Text("Mock GPS", fontSize = 10.sp) }
                             )
                         }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+                        HorizontalDivider(color = DamkarBorderLight)
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Text(
+                            text = "Simulasi Jam Sistem (Aturan Presensi):",
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, color = DamkarPrimary)
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            FilterChip(
+                                selected = simulatedHour == null,
+                                onClick = {
+                                    simulatedHour = null
+                                    simulatedMinute = null
+                                    simulatedDayOfWeek = null
+                                },
+                                label = { Text("Nyata (${deviceHour}:00)", fontSize = 10.sp) }
+                            )
+                            FilterChip(
+                                selected = simulatedHour == 4,
+                                onClick = {
+                                    simulatedHour = 4
+                                    simulatedMinute = 30
+                                    simulatedDayOfWeek = Calendar.MONDAY
+                                },
+                                label = { Text("04:30 (Belum 05:00)", fontSize = 10.sp) }
+                            )
+                            FilterChip(
+                                selected = simulatedHour == 7,
+                                onClick = {
+                                    simulatedHour = 7
+                                    simulatedMinute = 30
+                                    simulatedDayOfWeek = Calendar.MONDAY
+                                },
+                                label = { Text("07:30 (Masuk Tepat)", fontSize = 10.sp) }
+                            )
+                            FilterChip(
+                                selected = simulatedHour == 8,
+                                onClick = {
+                                    simulatedHour = 8
+                                    simulatedMinute = 30
+                                    simulatedDayOfWeek = Calendar.MONDAY
+                                },
+                                label = { Text("08:30 (Kesiangan)", fontSize = 10.sp) }
+                            )
+                            FilterChip(
+                                selected = simulatedHour == 10,
+                                onClick = {
+                                    simulatedHour = 10
+                                    simulatedMinute = 0
+                                    simulatedDayOfWeek = Calendar.MONDAY
+                                },
+                                label = { Text("10:00 (Lewat 09:00)", fontSize = 10.sp) }
+                            )
+                            FilterChip(
+                                selected = simulatedHour == 13,
+                                onClick = {
+                                    simulatedHour = 13
+                                    simulatedMinute = 0
+                                    simulatedDayOfWeek = Calendar.MONDAY
+                                },
+                                label = { Text("13:00 (Belum 15:00)", fontSize = 10.sp) }
+                            )
+                            FilterChip(
+                                selected = simulatedHour == 15 && simulatedDayOfWeek != Calendar.FRIDAY,
+                                onClick = {
+                                    simulatedHour = 15
+                                    simulatedMinute = 15
+                                    simulatedDayOfWeek = Calendar.MONDAY
+                                },
+                                label = { Text("15:15 (<15:30 Pulang Cepat)", fontSize = 10.sp) }
+                            )
+                            FilterChip(
+                                selected = simulatedHour == 15 && simulatedDayOfWeek == Calendar.FRIDAY,
+                                onClick = {
+                                    simulatedHour = 15
+                                    simulatedMinute = 45
+                                    simulatedDayOfWeek = Calendar.FRIDAY
+                                },
+                                label = { Text("15:45 Jum (<16:00 Pulang Cepat)", fontSize = 10.sp) }
+                            )
+                            FilterChip(
+                                selected = simulatedHour == 16,
+                                onClick = {
+                                    simulatedHour = 16
+                                    simulatedMinute = 30
+                                    simulatedDayOfWeek = Calendar.MONDAY
+                                },
+                                label = { Text("16:30 (Jam Pulang Normal)", fontSize = 10.sp) }
+                            )
+                            FilterChip(
+                                selected = simulatedHour == 22,
+                                onClick = {
+                                    simulatedHour = 22
+                                    simulatedMinute = 15
+                                    simulatedDayOfWeek = Calendar.MONDAY
+                                },
+                                label = { Text("22:15 (Lewat 22:00)", fontSize = 10.sp) }
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Peringatan jika waktu belum buka atau batas waktu telah terlewati
+            val isDispensasi = todayAbsensi?.status in listOf("Izin", "Sakit", "Cuti", "Alfa", "Dinas Luar") || myPengajuanToday != null
+            val labelDispensasi = todayAbsensi?.status ?: myPengajuanToday?.jenis ?: "DISPENSASI"
+
+            // 1. Absen Masuk: Belum jam 05:00 WIB
+            if (!isDispensasi && todayAbsensi?.jamMasuk == null && isBatasMasukBelumBuka) {
+                item {
+                    Surface(
+                        color = DamkarGoldContainer.copy(alpha = 0.8f),
+                        shape = RoundedCornerShape(10.dp),
+                        border = BorderStroke(1.dp, DamkarGoldDark.copy(alpha = 0.5f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Schedule,
+                                contentDescription = null,
+                                tint = DamkarGoldDark,
+                                modifier = Modifier.size(24.dp)
+                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column {
+                                Text(
+                                    text = "Waktu Absen Masuk Belum Dibuka (Pukul 05:00 - 09:00 WIB)",
+                                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold, color = DamkarGoldDark)
+                                )
+                                Text(
+                                    text = "Absen pagi baru bisa dilakukan mulai pukul 05:00 WIB. Tombol absen masuk akan aktif otomatis pada pukul 05:00 WIB.",
+                                    style = MaterialTheme.typography.bodySmall.copy(color = DamkarTextPrimary, fontSize = 11.sp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 2. Absen Masuk: Lewat batas jam 09:00 WIB -> Keterangan: Anda tidak absen
+            if (!isDispensasi && todayAbsensi?.jamMasuk == null && isBatasMasukLewat) {
+                item {
+                    Surface(
+                        color = DamkarDangerContainer,
+                        shape = RoundedCornerShape(10.dp),
+                        border = BorderStroke(1.dp, DamkarDanger),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.LockClock,
+                                contentDescription = null,
+                                tint = DamkarDanger,
+                                modifier = Modifier.size(24.dp)
+                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column {
+                                Text(
+                                    text = "Batas Waktu Absen Masuk Berakhir (Pukul 09:00 WIB)",
+                                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold, color = DamkarDanger)
+                                )
+                                Text(
+                                    text = "Keterangan: Anda tidak absen. Waktu presensi masuk telah berakhir pada pukul 09:00 WIB. Tombol absen masuk otomatis terkunci.",
+                                    style = MaterialTheme.typography.bodySmall.copy(color = DamkarTextPrimary, fontSize = 11.sp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 3. Absen Pulang: Belum jam 15:00 WIB
+            if (!isDispensasi && todayAbsensi?.jamMasuk != null && todayAbsensi?.jamPulang == null && isBatasPulangBelumBuka) {
+                item {
+                    Surface(
+                        color = DamkarInfoContainer.copy(alpha = 0.8f),
+                        shape = RoundedCornerShape(10.dp),
+                        border = BorderStroke(1.dp, DamkarInfo.copy(alpha = 0.5f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Schedule,
+                                contentDescription = null,
+                                tint = DamkarInfo,
+                                modifier = Modifier.size(24.dp)
+                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column {
+                                Text(
+                                    text = "Waktu Absen Pulang Belum Dibuka (Pukul 15:00 - 22:00 WIB)",
+                                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold, color = DamkarInfo)
+                                )
+                                Text(
+                                    text = "Absen pulang baru bisa dilakukan mulai pukul 15:00 WIB. Tombol absen pulang akan aktif pada pukul 15:00 WIB.",
+                                    style = MaterialTheme.typography.bodySmall.copy(color = DamkarTextPrimary, fontSize = 11.sp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 4. Absen Pulang: Lewat batas jam 22:00 WIB
+            if (!isDispensasi && todayAbsensi?.jamMasuk != null && todayAbsensi?.jamPulang == null && isBatasPulangLewat) {
+                item {
+                    Surface(
+                        color = DamkarDangerContainer,
+                        shape = RoundedCornerShape(10.dp),
+                        border = BorderStroke(1.dp, DamkarDanger),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.LockClock,
+                                contentDescription = null,
+                                tint = DamkarDanger,
+                                modifier = Modifier.size(24.dp)
+                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column {
+                                Text(
+                                    text = "Batas Waktu Absen Pulang Berakhir (Pukul 22:00 WIB)",
+                                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold, color = DamkarDanger)
+                                )
+                                Text(
+                                    text = "Waktu presensi pulang telah berakhir pada pukul 22:00 WIB. Tombol absen pulang otomatis tidak dapat diklik dan kehadiran tercatat Mangkir Tidak Absen Pulang.",
+                                    style = MaterialTheme.typography.bodySmall.copy(color = DamkarTextPrimary, fontSize = 11.sp)
+                                )
+                            }
+                        }
                     }
                 }
             }
 
             // Primary Action Buttons (Absen Masuk & Absen Pulang)
             item {
-                val isDispensasi = todayAbsensi?.status in listOf("Izin", "Sakit", "Cuti", "Dinas Luar") || myPengajuanToday != null
-                val labelDispensasi = todayAbsensi?.status ?: myPengajuanToday?.jenis ?: "DISPENSASI"
-                val canAbsenMasuk = !isDispensasi && todayAbsensi?.jamMasuk == null
-                val canAbsenPulang = !isDispensasi && todayAbsensi?.jamMasuk != null && todayAbsensi?.jamPulang == null
+                // Absen masuk baru bisa jam 05.00 dan otomatis TIDAK BISA DIPILIH ketika pegawai tidak absen hingga pukul 09.00
+                val canAbsenMasuk = !isDispensasi && todayAbsensi?.jamMasuk == null && !isBatasMasukBelumBuka && !isBatasMasukLewat
+                // Absen pulang baru bisa jam 15.00 dan otomatis TIDAK BISA DIKLIK ketika pegawai tidak absen pulang hingga pukul 22.00
+                val canAbsenPulang = !isDispensasi && todayAbsensi?.jamMasuk != null && todayAbsensi?.jamPulang == null && !isBatasPulangBelumBuka && !isBatasPulangLewat
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -511,7 +892,13 @@ fun PegawaiDashboardScreen(
                             .height(56.dp)
                     ) {
                         Icon(
-                            imageVector = if (isMockGpsDetected) Icons.Default.GpsOff else if (isDispensasi) Icons.Default.TaskAlt else Icons.Default.CameraAlt,
+                            imageVector = when {
+                                isMockGpsDetected -> Icons.Default.GpsOff
+                                isDispensasi -> Icons.Default.TaskAlt
+                                isBatasMasukBelumBuka -> Icons.Default.Schedule
+                                isBatasMasukLewat && todayAbsensi?.jamMasuk == null -> Icons.Default.LockClock
+                                else -> Icons.Default.CameraAlt
+                            },
                             contentDescription = null,
                             tint = if (canAbsenMasuk && !isMockGpsDetected) Color.White else DamkarTextSecondary
                         )
@@ -521,6 +908,8 @@ fun PegawaiDashboardScreen(
                                 isMockGpsDetected -> "MOCK GPS AKTIF"
                                 isDispensasi -> "TERISI (${labelDispensasi.uppercase()})"
                                 todayAbsensi?.jamMasuk != null -> "SUDAH MASUK"
+                                isBatasMasukBelumBuka -> "BELUM JAM 05:00"
+                                isBatasMasukLewat -> "LEWAT 09:00 (KUNCI)"
                                 else -> "ABSEN MASUK"
                             },
                             fontWeight = FontWeight.Bold,
@@ -551,7 +940,13 @@ fun PegawaiDashboardScreen(
                             .height(56.dp)
                     ) {
                         Icon(
-                            imageVector = if (isMockGpsDetected) Icons.Default.GpsOff else if (isDispensasi) Icons.Default.TaskAlt else Icons.Default.Logout,
+                            imageVector = when {
+                                isMockGpsDetected -> Icons.Default.GpsOff
+                                isDispensasi -> Icons.Default.TaskAlt
+                                isBatasPulangBelumBuka -> Icons.Default.Schedule
+                                isBatasPulangLewat && todayAbsensi?.jamPulang == null -> Icons.Default.LockClock
+                                else -> Icons.Default.Logout
+                            },
                             contentDescription = null,
                             tint = if (canAbsenPulang && !isMockGpsDetected) DamkarAccentGold else DamkarTextSecondary
                         )
@@ -561,6 +956,9 @@ fun PegawaiDashboardScreen(
                                 isMockGpsDetected -> "MOCK GPS AKTIF"
                                 isDispensasi -> "TERISI (${labelDispensasi.uppercase()})"
                                 todayAbsensi?.jamPulang != null -> "SUDAH PULANG"
+                                todayAbsensi?.jamMasuk == null -> "ABSEN PULANG"
+                                isBatasPulangBelumBuka -> "BELUM JAM 15:00"
+                                isBatasPulangLewat -> "LEWAT 22:00 (KUNCI)"
                                 else -> "ABSEN PULANG"
                             },
                             fontWeight = FontWeight.Bold,
@@ -581,20 +979,35 @@ fun PegawaiDashboardScreen(
 
             item {
                 val hadirBulan = userAbsensiList.count { it.status == "Hadir" }
-                val terlambatBulan = userAbsensiList.count { it.status == "Terlambat" }
+                val izinBulan = userAbsensiList.count { it.status == "Izin" }
+                val sakitBulan = userAbsensiList.count { it.status == "Sakit" }
+                val cutiBulan = userAbsensiList.count { it.status == "Cuti" }
                 val dinasLuarBulan = userAbsensiList.count { it.status.equals("Dinas Luar", ignoreCase = true) }
-                val izinBulan = userAbsensiList.count { it.status in listOf("Izin", "Cuti", "Sakit") }
-                val mangkirBulan = userAbsensiList.count { it.status.startsWith("Mangkir") }
+                val mangkirBulan = userAbsensiList.count { it.status.startsWith("Mangkir") || it.status == "Alfa" }
+                val kesianganBulan = userAbsensiList.count { it.status == "Kesiangan" || it.keterangan?.contains("Kesiangan", ignoreCase = true) == true }
+                val pulangCepatBulan = userAbsensiList.count { it.keterangan?.contains("pulang cepat", ignoreCase = true) == true }
+                val tidakAbsenBulan = userAbsensiList.count { it.keterangan?.contains("tidak absen", ignoreCase = true) == true || (it.status.startsWith("Mangkir") && it.jamMasuk == null) }
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    StatCard("Hadir", "$hadirBulan", Icons.Default.CheckCircle, DamkarSuccess, modifier = Modifier.weight(1f))
-                    StatCard("Telat", "$terlambatBulan", Icons.Default.Warning, DamkarGoldDark, modifier = Modifier.weight(1f))
-                    StatCard("Dinas", "$dinasLuarBulan", Icons.Default.DirectionsCar, Color(0xFF0F766E), modifier = Modifier.weight(1f))
-                    StatCard("Izin", "$izinBulan", Icons.Default.EventNote, DamkarInfo, modifier = Modifier.weight(1f))
-                    StatCard("Alfa", "$mangkirBulan", Icons.Default.Cancel, DamkarDanger, modifier = Modifier.weight(1f))
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        StatCard("Hadir", "$hadirBulan", Icons.Default.CheckCircle, DamkarSuccess, modifier = Modifier.weight(1f))
+                        StatCard("Izin", "$izinBulan", Icons.Default.EventNote, DamkarInfo, modifier = Modifier.weight(1f))
+                        StatCard("Sakit", "$sakitBulan", Icons.Default.MedicalServices, Color(0xFF8B5CF6), modifier = Modifier.weight(1f))
+                        StatCard("Cuti", "$cutiBulan", Icons.Default.FlightTakeoff, Color(0xFF6366F1), modifier = Modifier.weight(1f))
+                        StatCard("Dinas", "$dinasLuarBulan", Icons.Default.DirectionsCar, Color(0xFF0F766E), modifier = Modifier.weight(1f))
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        StatCard("Alfa", "$mangkirBulan", Icons.Default.Cancel, DamkarDanger, modifier = Modifier.weight(1f))
+                        StatCard("Kesiangan", "$kesianganBulan", Icons.Default.Warning, DamkarGoldDark, modifier = Modifier.weight(1f))
+                        StatCard("Plg Cepat", "$pulangCepatBulan", Icons.Default.DirectionsRun, Color(0xFFD97706), modifier = Modifier.weight(1f))
+                        StatCard("Tdk Absen", "$tidakAbsenBulan", Icons.Default.LockClock, Color(0xFF991B1B), modifier = Modifier.weight(1f))
+                    }
                 }
             }
 
@@ -621,7 +1034,8 @@ fun PegawaiDashboardScreen(
                             userLon = userLon,
                             selfieUrl = photoUrl,
                             isMockGps = isMockGpsDetected,
-                            keterangan = "Absen Masuk via Mobile App"
+                            keterangan = null,
+                            simulatedHour = simulatedHour
                         )
                     } else {
                         repository.submitAbsenPulang(
@@ -630,14 +1044,26 @@ fun PegawaiDashboardScreen(
                             userLon = userLon,
                             selfieUrl = photoUrl,
                             isMockGps = isMockGpsDetected,
-                            keterangan = "Absen Pulang via Mobile App"
+                            keterangan = "Absen Pulang via Mobile App",
+                            simulatedHour = simulatedHour,
+                            simulatedMinute = simulatedMinute,
+                            simulatedDayOfWeek = simulatedDayOfWeek
                         )
                     }
 
-                    result.onSuccess {
+                    result.onSuccess { updatedAbsensi ->
                         isErrorFeedback = false
-                        feedbackMessage = if (actionType == "masuk") "Presensi MASUK berhasil tercatat dengan foto selfie dan GPS terverifikasi!"
-                        else "Presensi PULANG berhasil tercatat. Terima kasih atas dedikasi pengabdian hari ini!"
+                        OfflineSyncWorker.scheduleSync(context)
+                        feedbackMessage = if (actionType == "masuk") {
+                            if (updatedAbsensi.status == "Kesiangan") "Presensi MASUK tercatat: KESIANGAN (pukul 08:00 - 08:59)"
+                            else "Presensi MASUK berhasil tercatat dengan foto selfie dan GPS terverifikasi! (Sinkronisasi otomatis aktif)"
+                        } else {
+                            if (updatedAbsensi.keterangan?.contains("pulang cepat", ignoreCase = true) == true) {
+                                "Presensi PULANG berhasil tercatat. Keterangan: Anda pulang cepat."
+                            } else {
+                                "Presensi PULANG berhasil tercatat. Terima kasih atas dedikasi pengabdian hari ini!"
+                            }
+                        }
                     }.onFailure { err ->
                         isErrorFeedback = true
                         feedbackMessage = err.message ?: "Gagal memproses presensi."

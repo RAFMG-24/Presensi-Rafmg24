@@ -77,7 +77,10 @@ data class AbsensiEntity(
     val selfiePulangUrl: String? = null,
     val isMockGps: Boolean = false,
     val distanceMeters: Int = 0,
-    val keterangan: String? = null
+    val keterangan: String? = null,
+    val syncStatus: String = "SYNCED", // "SYNCED", "PENDING_SYNC"
+    val integritySignature: String? = null,
+    val isRooted: Boolean = false
 )
 
 @Entity(tableName = "pengajuan")

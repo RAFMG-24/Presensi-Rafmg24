@@ -148,11 +148,11 @@ fun AdminPengaturanScreen(
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = "Scheduler Mangkir Otomatis (23:59 WIB)",
+                                text = "Scheduler Mangkir Otomatis (22:00 WIB)",
                                 style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold)
                             )
                             Text(
-                                text = "Pegawai tanpa presensi masuk -> 'Mangkir / Alfa'. Pegawai tanpa absen pulang -> 'Mangkir Tidak Absen Pulang'.",
+                                text = "Hanya aktif setelah pukul 22:00 WIB. Pegawai tanpa presensi masuk -> 'Mangkir / Alfa'. Pegawai tanpa absen pulang -> 'Mangkir Tidak Absen Pulang'.",
                                 style = MaterialTheme.typography.labelSmall.copy(color = DamkarTextSecondary, fontSize = 10.sp)
                             )
                         }
@@ -228,7 +228,7 @@ fun AdminPengaturanScreen(
                                 jamPulang = jamPulang,
                                 toleransiMenit = toleransi.toIntOrNull() ?: 15,
                                 defaultRadiusMeter = radiusDefault.toIntOrNull() ?: 100,
-                                autoMangkirTime = "23:59 WIB",
+                                autoMangkirTime = "22:00 WIB",
                                 disallowMockGps = mockGpsBlockEnabled
                             )
                         )

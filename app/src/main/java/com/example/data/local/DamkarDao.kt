@@ -107,6 +107,12 @@ interface DamkarDao {
     @Query("SELECT * FROM absensi WHERE tanggal = :tanggal")
     suspend fun getAbsensiByDate(tanggal: String): List<AbsensiEntity>
 
+    @Query("SELECT * FROM absensi WHERE syncStatus = 'PENDING_SYNC'")
+    suspend fun getPendingSyncAbsensi(): List<AbsensiEntity>
+
+    @Query("UPDATE absensi SET syncStatus = 'SYNCED' WHERE id = :id")
+    suspend fun markAbsensiSynced(id: Long)
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAbsensi(absensi: AbsensiEntity): Long
 

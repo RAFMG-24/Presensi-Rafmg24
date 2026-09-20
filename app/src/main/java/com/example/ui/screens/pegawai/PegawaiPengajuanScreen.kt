@@ -374,7 +374,7 @@ fun PengajuanFormDialog(
     onDismiss: () -> Unit,
     onSubmit: (jenis: String, tglMulai: String, tglSelesai: String, alasan: String, lampiranUrl: String?) -> Unit
 ) {
-    val jenisList = listOf("Izin", "Sakit", "Cuti", "Dinas Luar")
+    val jenisList = listOf("Izin", "Sakit", "Cuti", "Alfa", "Dinas Luar")
     var selectedJenis by remember { mutableStateOf("Izin") }
 
     val todayStr = remember { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date()) }
