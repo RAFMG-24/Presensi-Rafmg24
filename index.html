@@ -203,7 +203,7 @@
           <span id="badgePendingIzin" class="hidden bg-damkar-red text-white text-[9px] font-black px-1.5 py-0.2 rounded-full">0</span>
         </button>
         <button onclick="switchTab('tab-rekap')" id="nav-tab-rekap" class="nav-item px-3.5 py-2 rounded-lg font-medium text-slate-300 hover:text-white hover:bg-slate-800/50 flex items-center space-x-1.5 whitespace-nowrap transition">
-          <i class="fa-solid fa-file-invoice"></i><span>6. Rekapitulasi & Ekspor</span>
+          <i class="fa-solid fa-file-invoice"></i><span>6. Rekap Data Presensi</span>
         </button>
         <button onclick="switchTab('tab-audit')" id="nav-tab-audit" class="nav-item px-3.5 py-2 rounded-lg font-medium text-slate-300 hover:text-white hover:bg-slate-800/50 flex items-center space-x-1.5 whitespace-nowrap transition">
           <i class="fa-solid fa-shield-halved"></i><span>7. Audit Log</span>
@@ -548,27 +548,28 @@
     </div>
 
     <!-- ========================================== -->
-    <!-- TAB 6: REKAPITULASI & EKSPOR LAPORAN        -->
+    <!-- TAB 6: REKAP DATA PRESENSI (HARIAN & BULANAN) -->
     <!-- ========================================== -->
     <div id="tab-rekap" class="tab-pane hidden space-y-6">
-      <div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-200 space-y-4">
+      <div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-200 space-y-5">
         <!-- Official Printable Header (Print Only) -->
         <div class="print-only border-b-2 border-slate-900 pb-3 mb-4 text-center">
           <h2 class="text-base font-black uppercase tracking-wider">PEMERINTAH KABUPATEN SUBANG</h2>
           <h1 class="text-lg font-black uppercase">DINAS PEMADAM KEBAKARAN DAN PENYELAMATAN</h1>
           <p class="text-xs">Jl. Mayjen Sutoyo No. 45, Karanganyar, Kec. Subang, Jawa Barat 41211 • Telp: (0260) 411113 / 113</p>
-          <div class="mt-2 text-xs font-bold border-t border-slate-400 pt-1">
-            LAPORAN REKAPITULASI KEHADIRAN PERSONEL DAMKAR (GEOFENCING MULTI-LOKASI)
+          <div id="printReportTitle" class="mt-2 text-xs font-bold border-t border-slate-400 pt-1 uppercase">
+            LAPORAN REKAPITULASI PRESENSI HARIAN PERSONEL DAMKAR
           </div>
           <div id="printDateGenerated" class="text-[10px] text-slate-600"></div>
         </div>
 
-        <div class="no-print flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-4">
+        <!-- Top Header & Export Action Buttons -->
+        <div class="no-print flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-100 pb-4">
           <div>
             <h2 class="text-base font-bold text-damkar-navy flex items-center gap-2">
-              <i class="fa-solid fa-file-invoice text-emerald-600"></i> Rekapitulasi Presensi & Ekspor Laporan
+              <i class="fa-solid fa-file-invoice text-emerald-600"></i> Rekap Data Presensi Personel Damkar
             </h2>
-            <p class="text-xs text-slate-500">Filter, pratinjau data kehadiran, dan unduh format Excel (.xlsx), CSV, atau cetak PDF.</p>
+            <p class="text-xs text-slate-500">Rekapitulasi terpadu presensi harian serta akumulasi bulanan (kehadiran, sakit, izin, cuti, alfa/mangkir, dinas luar, keterlambatan & cepat pulang).</p>
           </div>
           
           <!-- Tombol Ekspor Multi-Format -->
@@ -579,49 +580,150 @@
             <button onclick="exportToCSV()" class="bg-blue-700 hover:bg-blue-800 text-white text-xs font-bold px-3.5 py-2 rounded-lg shadow-sm flex items-center gap-1.5 transition">
               <i class="fa-solid fa-file-csv text-sm text-blue-200"></i> Ekspor CSV
             </button>
-            <button onclick="window.print()" class="bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold px-3.5 py-2 rounded-lg shadow-sm flex items-center gap-1.5 transition">
+            <button onclick="printRekapReport()" class="bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold px-3.5 py-2 rounded-lg shadow-sm flex items-center gap-1.5 transition">
               <i class="fa-solid fa-print text-sm text-slate-300"></i> Cetak / Simpan PDF
             </button>
           </div>
         </div>
 
-        <!-- Filter Bar -->
-        <div class="no-print grid grid-cols-1 sm:grid-cols-3 gap-3 p-3 bg-slate-50 rounded-xl border border-slate-200">
+        <!-- Segmented Tab Switcher: Harian vs Bulanan -->
+        <div class="no-print flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-100 p-1.5 rounded-xl border border-slate-200">
+          <div class="flex items-center space-x-1">
+            <button id="btnRekapModeHarian" onclick="setRekapMode('HARIAN')" class="px-4 py-2 text-xs font-black rounded-lg transition flex items-center gap-2 bg-white text-damkar-navy shadow-sm border border-slate-200">
+              <i class="fa-solid fa-calendar-day text-damkar-red"></i> Rekap Presensi Harian
+            </button>
+            <button id="btnRekapModeBulanan" onclick="setRekapMode('BULANAN')" class="px-4 py-2 text-xs font-bold rounded-lg transition flex items-center gap-2 text-slate-600 hover:text-slate-900 hover:bg-white/60">
+              <i class="fa-solid fa-calendar-alt text-damkar-orange"></i> Rekap Presensi Bulanan
+            </button>
+          </div>
+          <div class="text-[11px] font-semibold text-slate-500 px-2 flex items-center gap-2">
+            <span id="rekapModeLabel" class="inline-block w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+            <span id="rekapModeSubtext">Mode Aktif: Rekap Absen Harian</span>
+          </div>
+        </div>
+
+        <!-- FILTER PANEL: REKAP HARIAN -->
+        <div id="filterPanelHarian" class="no-print grid grid-cols-1 sm:grid-cols-4 gap-3 p-3.5 bg-slate-50 rounded-xl border border-slate-200">
           <div>
-            <label class="block text-[11px] font-bold text-slate-600 mb-1">Pilih Pos / Wilayah Sektor</label>
-            <select id="rekapFilterPos" onchange="renderRekapTable()" class="w-full text-xs px-3 py-2 bg-white border border-slate-300 rounded-lg">
+            <label class="block text-[11px] font-bold text-slate-600 mb-1">Tanggal Presensi</label>
+            <input type="date" id="rekapHarianDate" onchange="renderRekapTable()" value="2026-09-21" class="w-full text-xs px-3 py-2 bg-white border border-slate-300 rounded-lg font-mono focus:ring-1 focus:ring-damkar-navy">
+          </div>
+          <div>
+            <label class="block text-[11px] font-bold text-slate-600 mb-1">Pos Sektor / Lokasi</label>
+            <select id="rekapHarianFilterPos" onchange="renderRekapTable()" class="w-full text-xs px-3 py-2 bg-white border border-slate-300 rounded-lg">
               <option value="ALL">Semua Titik Pos</option>
             </select>
           </div>
           <div>
-            <label class="block text-[11px] font-bold text-slate-600 mb-1">Status Kehadiran GPS</label>
-            <select id="rekapFilterStatus" onchange="renderRekapTable()" class="w-full text-xs px-3 py-2 bg-white border border-slate-300 rounded-lg">
+            <label class="block text-[11px] font-bold text-slate-600 mb-1">Status Kehadiran</label>
+            <select id="rekapHarianFilterStatus" onchange="renderRekapTable()" class="w-full text-xs px-3 py-2 bg-white border border-slate-300 rounded-lg">
               <option value="ALL">Semua Status</option>
-              <option value="VALID">VALID (Dalam Radius)</option>
-              <option value="DI LUAR RADIUS">DI LUAR RADIUS</option>
+              <option value="HADIR_VALID">Hadir Valid (Tepat Waktu)</option>
+              <option value="TERLAMBAT">Terlambat (> 08.00 WIB)</option>
+              <option value="CEPAT_PULANG">Cepat Pulang (< 16.00 WIB)</option>
+              <option value="DI LUAR RADIUS">Di Luar Radius Pos</option>
+              <option value="IZIN_CUTI_DL">Izin / Sakit / Cuti / DL</option>
+              <option value="ALFA">Alfa / Mangkir</option>
             </select>
           </div>
           <div>
-            <label class="block text-[11px] font-bold text-slate-600 mb-1">Pencarian Personel / NIP</label>
-            <input type="text" id="rekapSearchQuery" oninput="renderRekapTable()" placeholder="Cari nama atau NIP..." class="w-full text-xs px-3 py-2 bg-white border border-slate-300 rounded-lg">
+            <label class="block text-[11px] font-bold text-slate-600 mb-1">Pencarian (Nama / NIP / Jabatan)</label>
+            <input type="text" id="rekapHarianSearch" oninput="renderRekapTable()" placeholder="Cari nama, NIP, atau jabatan..." class="w-full text-xs px-3 py-2 bg-white border border-slate-300 rounded-lg">
           </div>
         </div>
 
-        <!-- Tabel Rekapitulasi -->
-        <div class="overflow-x-auto border border-slate-200 rounded-xl">
-          <table class="w-full text-left text-xs text-slate-600">
+        <!-- FILTER PANEL: REKAP BULANAN -->
+        <div id="filterPanelBulanan" class="hidden no-print grid grid-cols-1 sm:grid-cols-4 gap-3 p-3.5 bg-slate-50 rounded-xl border border-slate-200">
+          <div>
+            <label class="block text-[11px] font-bold text-slate-600 mb-1">Pilih Bulan</label>
+            <select id="rekapBulananMonth" onchange="renderRekapTable()" class="w-full text-xs px-3 py-2 bg-white border border-slate-300 rounded-lg font-medium">
+              <option value="1">Januari</option>
+              <option value="2">Februari</option>
+              <option value="3">Maret</option>
+              <option value="4">April</option>
+              <option value="5">Mei</option>
+              <option value="6">Juni</option>
+              <option value="7">Juli</option>
+              <option value="8">Agustus</option>
+              <option value="9" selected>September</option>
+              <option value="10">Oktober</option>
+              <option value="11">November</option>
+              <option value="12">Desember</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-[11px] font-bold text-slate-600 mb-1">Pilih Tahun</label>
+            <select id="rekapBulananYear" onchange="renderRekapTable()" class="w-full text-xs px-3 py-2 bg-white border border-slate-300 rounded-lg font-medium font-mono">
+              <option value="2025">2025</option>
+              <option value="2026" selected>2026</option>
+              <option value="2027">2027</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-[11px] font-bold text-slate-600 mb-1">Unit Kerja / Mako</label>
+            <select id="rekapBulananFilterUnit" onchange="renderRekapTable()" class="w-full text-xs px-3 py-2 bg-white border border-slate-300 rounded-lg">
+              <option value="ALL">Semua Unit Kerja</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-[11px] font-bold text-slate-600 mb-1">Pencarian (Nama / NIP / Jabatan)</label>
+            <input type="text" id="rekapBulananSearch" oninput="renderRekapTable()" placeholder="Cari nama, NIP, atau jabatan..." class="w-full text-xs px-3 py-2 bg-white border border-slate-300 rounded-lg">
+          </div>
+        </div>
+
+        <!-- STATISTIK RINGKASAN REKAP -->
+        <div id="rekapSummaryCards" class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2.5">
+          <!-- Populated by JS -->
+        </div>
+
+        <!-- TABEL REKAPITULASI (CONTAINER) -->
+        <div class="overflow-x-auto border border-slate-200 rounded-xl bg-white">
+          <!-- TABLE HARIAN -->
+          <table id="tableRekapHarian" class="w-full text-left text-xs text-slate-600">
             <thead class="bg-slate-100 text-slate-700 font-bold uppercase text-[10px] border-b border-slate-200">
               <tr>
-                <th class="p-3">Tanggal & Waktu</th>
-                <th class="p-3">NIP Pegawai</th>
+                <th class="p-3 w-10 text-center">No</th>
+                <th class="p-3">NIP</th>
                 <th class="p-3">Nama Pegawai</th>
-                <th class="p-3">Pos Sektor Hadir</th>
-                <th class="p-3">Jarak ke Pos (Meter)</th>
-                <th class="p-3">Status Geofence</th>
-                <th class="p-3 no-print text-center">Foto</th>
+                <th class="p-3">Jabatan</th>
+                <th class="p-3">Unit / Pos Tugas</th>
+                <th class="p-3 text-center">Jam Masuk</th>
+                <th class="p-3 text-center">Jam Pulang</th>
+                <th class="p-3 text-center">Keterlambatan</th>
+                <th class="p-3 text-center">Cepat Pulang</th>
+                <th class="p-3">Jarak GPS</th>
+                <th class="p-3 text-center">Status Kehadiran</th>
+                <th class="p-3 no-print text-center">Bukti Swafoto</th>
               </tr>
             </thead>
-            <tbody id="tableRekapBody" class="divide-y divide-slate-100">
+            <tbody id="tableRekapHarianBody" class="divide-y divide-slate-100">
+              <!-- Populated by JS -->
+            </tbody>
+          </table>
+
+          <!-- TABLE BULANAN -->
+          <table id="tableRekapBulanan" class="hidden w-full text-left text-xs text-slate-600">
+            <thead class="bg-slate-100 text-slate-700 font-bold uppercase text-[10px] border-b border-slate-200">
+              <tr>
+                <th class="p-3 w-10 text-center">No</th>
+                <th class="p-3">NIP</th>
+                <th class="p-3">Nama Pegawai</th>
+                <th class="p-3">Jabatan</th>
+                <th class="p-3">Unit Kerja</th>
+                <th class="p-2.5 text-center bg-emerald-50 text-emerald-800">Total Hadir</th>
+                <th class="p-2.5 text-center bg-amber-50 text-amber-800">Terlambat</th>
+                <th class="p-2.5 text-center bg-orange-50 text-orange-800">Cepat Pulang</th>
+                <th class="p-2.5 text-center bg-blue-50 text-blue-800">Sakit</th>
+                <th class="p-2.5 text-center bg-indigo-50 text-indigo-800">Izin</th>
+                <th class="p-2.5 text-center bg-purple-50 text-purple-800">Cuti</th>
+                <th class="p-2.5 text-center bg-red-50 text-red-800">Alfa/Mangkir</th>
+                <th class="p-2.5 text-center bg-teal-50 text-teal-800">Dinas Luar</th>
+                <th class="p-3 text-center">% Kehadiran</th>
+                <th class="p-3 text-center">Predikat Disiplin</th>
+                <th class="p-3 no-print text-center">Aksi</th>
+              </tr>
+            </thead>
+            <tbody id="tableRekapBulananBody" class="divide-y divide-slate-100">
               <!-- Populated by JS -->
             </tbody>
           </table>
@@ -776,6 +878,67 @@
     </div>
   </div>
 
+  <!-- ========================================== -->
+  <!-- MODAL: SESUAIKAN REKAP BULANAN PERSONEL    -->
+  <!-- ========================================== -->
+  <div id="modalEditMonthly" class="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white max-w-lg w-full rounded-2xl shadow-2xl border border-slate-200 overflow-hidden p-6 space-y-4">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+        <div>
+          <h4 class="font-bold text-damkar-navy text-sm flex items-center gap-2">
+            <i class="fa-solid fa-sliders text-damkar-red"></i> Penyesuaian Rekap Presensi Bulanan
+          </h4>
+          <p id="modalEditMonthlySub" class="text-xs text-slate-500 mt-0.5">Penyesuaian akumulasi kehadiran resmi personel Damkar.</p>
+        </div>
+        <button onclick="closeModalEditMonthly()" class="text-slate-400 hover:text-slate-700 text-lg"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+
+      <input type="hidden" id="editMonthlyNip">
+
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">Total Hadir (Hari)</label>
+          <input type="number" id="editMonthlyHadir" min="0" max="31" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-center font-bold text-emerald-700">
+        </div>
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">Terlambat (Kali)</label>
+          <input type="number" id="editMonthlyTerlambat" min="0" max="31" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-center font-bold text-amber-700">
+        </div>
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">Cepat Pulang (Kali)</label>
+          <input type="number" id="editMonthlyCepatPulang" min="0" max="31" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-center font-bold text-orange-700">
+        </div>
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">Sakit (Hari)</label>
+          <input type="number" id="editMonthlySakit" min="0" max="31" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-center font-bold text-blue-700">
+        </div>
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">Izin (Hari)</label>
+          <input type="number" id="editMonthlyIzin" min="0" max="31" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-center font-bold text-indigo-700">
+        </div>
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">Cuti (Hari)</label>
+          <input type="number" id="editMonthlyCuti" min="0" max="31" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-center font-bold text-purple-700">
+        </div>
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">Alfa / Mangkir (Hari)</label>
+          <input type="number" id="editMonthlyAlfa" min="0" max="31" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-center font-bold text-red-700">
+        </div>
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">Dinas Luar (Hari)</label>
+          <input type="number" id="editMonthlyDinasLuar" min="0" max="31" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-center font-bold text-teal-700">
+        </div>
+      </div>
+
+      <div class="flex items-center justify-end space-x-2 pt-3 border-t border-slate-100">
+        <button onclick="closeModalEditMonthly()" class="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-lg">Batal</button>
+        <button onclick="saveMonthlyEdit()" class="px-4 py-2 text-xs font-bold bg-damkar-navy hover:bg-damkar-navyDark text-white rounded-lg shadow-sm flex items-center gap-1.5">
+          <i class="fa-solid fa-floppy-disk"></i> Simpan Penyesuaian
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- TOAST CONTAINER -->
   <div id="toastNotification" class="fixed bottom-5 right-5 z-50 transform transition-all duration-300 translate-y-20 opacity-0 pointer-events-none">
     <div id="toastInner" class="bg-slate-900 text-white text-xs px-4 py-3 rounded-xl shadow-2xl flex items-center space-x-2.5 border border-slate-700">
@@ -818,10 +981,18 @@
     ];
 
     const DEFAULT_LOGS = [
-      { id: "LOG-001", waktu: "07:28:15 WIB", tanggal: "2026-09-21", personelNama: "Ahmad Fauzi, S.AP", personelNip: "198805122011011003", posNama: "Mako Damkar Pusat Subang", jarak: 42, radius: 120, status: "VALID", selfieUrl: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300&fit=crop&q=80" },
-      { id: "LOG-002", waktu: "07:44:02 WIB", tanggal: "2026-09-21", personelNama: "Budi Pratama, A.Md", personelNip: "199203152015031002", posNama: "Pos Sektor Kalijati", jarak: 85, radius: 150, status: "VALID", selfieUrl: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=300&fit=crop&q=80" },
-      { id: "LOG-003", waktu: "07:55:10 WIB", tanggal: "2026-09-21", personelNama: "Dedi Kusnadi", personelNip: "199507202020121004", posNama: "Pos Sektor Pamanukan", jarak: 320, radius: 100, status: "DI LUAR RADIUS", selfieUrl: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=300&fit=crop&q=80" }
+      { id: "LOG-001", waktu: "07:28:15 WIB", jamMasuk: "07:28:15", jamPulang: "16:05:00", terlambat: 0, cepatPulang: 0, tanggal: "2026-09-21", personelNama: "Ahmad Fauzi, S.AP", personelNip: "198805122011011003", jabatan: "Komandan Regu (Danru)", unit: "Mako Damkar Pusat Subang", posNama: "Mako Damkar Pusat Subang", jarak: 42, radius: 120, status: "VALID", selfieUrl: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300&fit=crop&q=80" },
+      { id: "LOG-002", waktu: "08:14:02 WIB", jamMasuk: "08:14:02", jamPulang: "16:00:00", terlambat: 14, cepatPulang: 0, tanggal: "2026-09-21", personelNama: "Budi Pratama, A.Md", personelNip: "199203152015031002", jabatan: "Petugas Operator Mobil", unit: "Pos Sektor Kalijati", posNama: "Pos Sektor Kalijati", jarak: 85, radius: 150, status: "TERLAMBAT", selfieUrl: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=300&fit=crop&q=80" },
+      { id: "LOG-003", waktu: "07:55:10 WIB", jamMasuk: "07:55:10", jamPulang: "15:20:00", terlambat: 0, cepatPulang: 40, tanggal: "2026-09-21", personelNama: "Dedi Kusnadi", personelNip: "199507202020121004", jabatan: "Anggota Tim Rescue", unit: "Pos Sektor Pamanukan", posNama: "Pos Sektor Pamanukan", jarak: 320, radius: 100, status: "DI LUAR RADIUS", selfieUrl: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=300&fit=crop&q=80" },
+      { id: "LOG-004", waktu: "07:22:30 WIB", jamMasuk: "07:22:30", jamPulang: "16:02:10", terlambat: 0, cepatPulang: 0, tanggal: "2026-09-21", personelNama: "Siti Rahmawati, S.Tr.Sos", personelNip: "199411082019022001", jabatan: "Staf Administrasi & Data", unit: "Mako Damkar Pusat Subang", posNama: "Mako Damkar Pusat Subang", jarak: 30, radius: 120, status: "VALID", selfieUrl: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=300&fit=crop&q=80" }
     ];
+
+    const DEFAULT_MONTHLY_REKAP = {
+      "198805122011011003": { hadir: 21, terlambat: 1, cepatPulang: 0, sakit: 0, izin: 0, cuti: 0, alfa: 0, dinasLuar: 1 },
+      "199203152015031002": { hadir: 18, terlambat: 2, cepatPulang: 1, sakit: 2, izin: 0, cuti: 0, alfa: 0, dinasLuar: 0 },
+      "199507202020121004": { hadir: 17, terlambat: 3, cepatPulang: 1, sakit: 0, izin: 1, cuti: 0, alfa: 1, dinasLuar: 2 },
+      "199411082019022001": { hadir: 20, terlambat: 0, cepatPulang: 0, sakit: 1, izin: 0, cuti: 1, alfa: 0, dinasLuar: 0 }
+    };
 
     const DEFAULT_AUDIT = [
       { id: "AUD-001", waktu: "2026-09-21 07:00:12", user: "Super Admin (Ahmad Fauzi)", aksi: "Sistem Dimulai", detail: "Inisialisasi Portal Super Admin Netlify SPA Damkar Subang" },
@@ -835,6 +1006,7 @@
       unitsList: JSON.parse(localStorage.getItem('super_damkar_units')) || DEFAULT_UNITS,
       pengajuanList: JSON.parse(localStorage.getItem('super_damkar_pengajuan')) || DEFAULT_PENGAJUAN,
       logsList: JSON.parse(localStorage.getItem('super_damkar_logs')) || DEFAULT_LOGS,
+      monthlyRekap: JSON.parse(localStorage.getItem('super_damkar_monthly_rekap')) || DEFAULT_MONTHLY_REKAP,
       auditList: JSON.parse(localStorage.getItem('super_damkar_audit')) || DEFAULT_AUDIT
     };
 
@@ -844,6 +1016,7 @@
       localStorage.setItem('super_damkar_units', JSON.stringify(appState.unitsList));
       localStorage.setItem('super_damkar_pengajuan', JSON.stringify(appState.pengajuanList));
       localStorage.setItem('super_damkar_logs', JSON.stringify(appState.logsList));
+      localStorage.setItem('super_damkar_monthly_rekap', JSON.stringify(appState.monthlyRekap));
       localStorage.setItem('super_damkar_audit', JSON.stringify(appState.auditList));
     }
 
@@ -972,6 +1145,10 @@
       if (btn) {
         btn.classList.add('active', 'text-damkar-gold', 'bg-slate-800/80', 'border', 'border-damkar-gold/40', 'font-bold');
         btn.classList.remove('text-slate-300', 'font-medium');
+      }
+
+      if (tabId === 'tab-rekap') {
+        renderRekapTable();
       }
 
       if (tabId === 'tab-ringkasan' && dashboardMap) {
@@ -1421,43 +1598,491 @@
     }
 
     // ==========================================
-    // REKAPITULASI & EKSPOR (EXCEL, CSV, PRINT)
+    // REKAP DATA PRESENSI (HARIAN & BULANAN)
     // ==========================================
+    let currentRekapMode = 'HARIAN';
+
+    function setRekapMode(mode) {
+      currentRekapMode = mode;
+      const btnHarian = document.getElementById('btnRekapModeHarian');
+      const btnBulanan = document.getElementById('btnRekapModeBulanan');
+      const panelHarian = document.getElementById('filterPanelHarian');
+      const panelBulanan = document.getElementById('filterPanelBulanan');
+      const tableHarian = document.getElementById('tableRekapHarian');
+      const tableBulanan = document.getElementById('tableRekapBulanan');
+      const modeLabel = document.getElementById('rekapModeLabel');
+      const modeSubtext = document.getElementById('rekapModeSubtext');
+      const printReportTitle = document.getElementById('printReportTitle');
+
+      if (mode === 'HARIAN') {
+        btnHarian.className = "px-4 py-2 text-xs font-black rounded-lg transition flex items-center gap-2 bg-white text-damkar-navy shadow-sm border border-slate-200";
+        btnBulanan.className = "px-4 py-2 text-xs font-bold rounded-lg transition flex items-center gap-2 text-slate-600 hover:text-slate-900 hover:bg-white/60";
+        panelHarian.classList.remove('hidden');
+        panelBulanan.classList.add('hidden');
+        tableHarian.classList.remove('hidden');
+        tableBulanan.classList.add('hidden');
+        modeLabel.className = "inline-block w-2.5 h-2.5 rounded-full bg-emerald-500";
+        modeSubtext.textContent = "Mode Aktif: Rekap Presensi Harian (GPS & Swafoto)";
+        if (printReportTitle) printReportTitle.textContent = "LAPORAN REKAPITULASI PRESENSI HARIAN PERSONEL DAMKAR";
+      } else {
+        btnBulanan.className = "px-4 py-2 text-xs font-black rounded-lg transition flex items-center gap-2 bg-white text-damkar-navy shadow-sm border border-slate-200";
+        btnHarian.className = "px-4 py-2 text-xs font-bold rounded-lg transition flex items-center gap-2 text-slate-600 hover:text-slate-900 hover:bg-white/60";
+        panelHarian.classList.add('hidden');
+        panelBulanan.classList.remove('hidden');
+        tableHarian.classList.add('hidden');
+        tableBulanan.classList.remove('hidden');
+        modeLabel.className = "inline-block w-2.5 h-2.5 rounded-full bg-damkar-orange";
+        modeSubtext.textContent = "Mode Aktif: Rekap Presensi Bulanan (Akumulasi 30 Hari)";
+        if (printReportTitle) {
+          const m = document.getElementById('rekapBulananMonth')?.options[document.getElementById('rekapBulananMonth').selectedIndex]?.text || 'September';
+          const y = document.getElementById('rekapBulananYear')?.value || '2026';
+          printReportTitle.textContent = `LAPORAN REKAPITULASI PRESENSI BULANAN PERSONEL DAMKAR (PERIODE: ${m.toUpperCase()} ${y})`;
+        }
+      }
+      renderRekapTable();
+    }
+
     function renderRekapTable() {
-      const tbody = document.getElementById('tableRekapBody');
-      const posFilter = document.getElementById('rekapFilterPos').value;
-      const statusFilter = document.getElementById('rekapFilterStatus').value;
-      const query = document.getElementById('rekapSearchQuery').value.toLowerCase();
+      const summaryCards = document.getElementById('rekapSummaryCards');
+
+      if (currentRekapMode === 'HARIAN') {
+        renderRekapHarianView(summaryCards);
+      } else {
+        renderRekapBulananView(summaryCards);
+      }
+    }
+
+    function renderRekapHarianView(summaryCards) {
+      const dateVal = document.getElementById('rekapHarianDate')?.value || '2026-09-21';
+      const posFilter = document.getElementById('rekapHarianFilterPos')?.value || 'ALL';
+      const statusFilter = document.getElementById('rekapHarianFilterStatus')?.value || 'ALL';
+      const query = (document.getElementById('rekapHarianSearch')?.value || '').toLowerCase().trim();
+      const tbody = document.getElementById('tableRekapHarianBody');
       tbody.innerHTML = '';
 
-      let list = appState.logsList;
-      if (posFilter !== 'ALL') list = list.filter(l => l.posNama === posFilter);
-      if (statusFilter !== 'ALL') list = list.filter(l => l.status === statusFilter);
-      if (query) list = list.filter(l => l.personelNama.toLowerCase().includes(query) || l.personelNip.includes(query));
+      // Compile daily list by joining all active personnel with logs/pengajuan
+      let rows = appState.personelList.map(p => {
+        // Find log on this date
+        const log = appState.logsList.find(l => l.tanggal === dateVal && l.personelNip === p.nip);
+        const pengajuan = appState.pengajuanList.find(pj => pj.nip === p.nip && pj.status === 'DISETUJUI');
 
-      if (list.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" class="p-6 text-center text-slate-400">Tidak ada riwayat presensi yang sesuai kriteria pencarian.</td></tr>';
+        if (log) {
+          return {
+            nip: p.nip,
+            nama: p.nama,
+            jabatan: p.jabatan,
+            unit: p.unit,
+            posTugas: log.posNama || p.unit,
+            jamMasuk: log.jamMasuk || log.waktu.split(' ')[0] || '07:30:00',
+            jamPulang: log.jamPulang || '16:00:00',
+            terlambat: log.terlambat !== undefined ? log.terlambat : (log.status === 'TERLAMBAT' ? 14 : 0),
+            cepatPulang: log.cepatPulang !== undefined ? log.cepatPulang : 0,
+            jarak: log.jarak,
+            radius: log.radius,
+            status: log.status,
+            selfieUrl: log.selfieUrl,
+            rawLog: log
+          };
+        } else if (pengajuan) {
+          return {
+            nip: p.nip,
+            nama: p.nama,
+            jabatan: p.jabatan,
+            unit: p.unit,
+            posTugas: p.unit,
+            jamMasuk: '-',
+            jamPulang: '-',
+            terlambat: 0,
+            cepatPulang: 0,
+            jarak: '-',
+            radius: '-',
+            status: pengajuan.jenis.toUpperCase(),
+            selfieUrl: null,
+            rawLog: null
+          };
+        } else {
+          return {
+            nip: p.nip,
+            nama: p.nama,
+            jabatan: p.jabatan,
+            unit: p.unit,
+            posTugas: p.unit,
+            jamMasuk: '-',
+            jamPulang: '-',
+            terlambat: 0,
+            cepatPulang: 0,
+            jarak: '-',
+            radius: '-',
+            status: 'ALFA / MANGKIR',
+            selfieUrl: null,
+            rawLog: null
+          };
+        }
+      });
+
+      // Filter Pos
+      if (posFilter !== 'ALL') {
+        rows = rows.filter(r => r.posTugas === posFilter || r.unit === posFilter);
+      }
+
+      // Filter Status
+      if (statusFilter !== 'ALL') {
+        if (statusFilter === 'HADIR_VALID') {
+          rows = rows.filter(r => r.status === 'VALID');
+        } else if (statusFilter === 'TERLAMBAT') {
+          rows = rows.filter(r => r.status === 'TERLAMBAT' || r.terlambat > 0);
+        } else if (statusFilter === 'CEPAT_PULANG') {
+          rows = rows.filter(r => r.cepatPulang > 0);
+        } else if (statusFilter === 'DI LUAR RADIUS') {
+          rows = rows.filter(r => r.status === 'DI LUAR RADIUS');
+        } else if (statusFilter === 'IZIN_CUTI_DL') {
+          rows = rows.filter(r => ['IZIN', 'SAKIT', 'CUTI', 'DINAS LUAR'].some(k => r.status.includes(k)));
+        } else if (statusFilter === 'ALFA') {
+          rows = rows.filter(r => r.status.includes('ALFA') || r.status.includes('MANGKIR'));
+        }
+      }
+
+      // Filter Query (Nama, NIP, Jabatan)
+      if (query) {
+        rows = rows.filter(r => 
+          r.nama.toLowerCase().includes(query) ||
+          r.nip.includes(query) ||
+          r.jabatan.toLowerCase().includes(query)
+        );
+      }
+
+      // Calculate KPI metrics
+      const totalPegawai = appState.personelList.length;
+      const countValid = rows.filter(r => r.status === 'VALID').length;
+      const countTerlambat = rows.filter(r => r.status === 'TERLAMBAT' || r.terlambat > 0).length;
+      const countCepatPulang = rows.filter(r => r.cepatPulang > 0).length;
+      const countIzinSakitCuti = rows.filter(r => ['IZIN', 'SAKIT', 'CUTI'].some(k => r.status.includes(k))).length;
+      const countDinasLuar = rows.filter(r => r.status.includes('DINAS LUAR')).length;
+      const countAlfa = rows.filter(r => r.status.includes('ALFA')).length;
+
+      summaryCards.innerHTML = `
+        <div class="bg-slate-50 border border-slate-200 rounded-xl p-3 text-center">
+          <p class="text-[10px] uppercase font-bold text-slate-500">Total Personel</p>
+          <p class="text-xl font-black text-slate-800">${totalPegawai}</p>
+          <span class="text-[10px] text-slate-500 font-medium">Terdaftar di Damkar</span>
+        </div>
+        <div class="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-center">
+          <p class="text-[10px] uppercase font-bold text-emerald-700">Hadir Tepat Waktu</p>
+          <p class="text-xl font-black text-emerald-700">${countValid}</p>
+          <span class="text-[10px] text-emerald-600 font-medium">Radius & Jam Valid</span>
+        </div>
+        <div class="bg-amber-50 border border-amber-200 rounded-xl p-3 text-center">
+          <p class="text-[10px] uppercase font-bold text-amber-700">Terlambat</p>
+          <p class="text-xl font-black text-amber-700">${countTerlambat}</p>
+          <span class="text-[10px] text-amber-600 font-medium">> 08.00 WIB</span>
+        </div>
+        <div class="bg-orange-50 border border-orange-200 rounded-xl p-3 text-center">
+          <p class="text-[10px] uppercase font-bold text-orange-700">Cepat Pulang</p>
+          <p class="text-xl font-black text-orange-700">${countCepatPulang}</p>
+          <span class="text-[10px] text-orange-600 font-medium">< 16.00 WIB</span>
+        </div>
+        <div class="bg-blue-50 border border-blue-200 rounded-xl p-3 text-center">
+          <p class="text-[10px] uppercase font-bold text-blue-700">Izin / Sakit / Cuti</p>
+          <p class="text-xl font-black text-blue-700">${countIzinSakitCuti}</p>
+          <span class="text-[10px] text-blue-600 font-medium">Pengajuan Sah</span>
+        </div>
+        <div class="bg-teal-50 border border-teal-200 rounded-xl p-3 text-center">
+          <p class="text-[10px] uppercase font-bold text-teal-700">Dinas Luar</p>
+          <p class="text-xl font-black text-teal-700">${countDinasLuar}</p>
+          <span class="text-[10px] text-teal-600 font-medium">Surat Perintah Tugas</span>
+        </div>
+        <div class="bg-red-50 border border-red-200 rounded-xl p-3 text-center">
+          <p class="text-[10px] uppercase font-bold text-red-700">Alfa / Mangkir</p>
+          <p class="text-xl font-black text-red-700">${countAlfa}</p>
+          <span class="text-[10px] text-red-600 font-medium">Tanpa Keterangan</span>
+        </div>
+      `;
+
+      if (rows.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="12" class="p-8 text-center text-slate-400">Tidak ada data presensi yang sesuai kriteria filter.</td></tr>';
         return;
       }
 
-      list.forEach(l => {
-        const isValid = l.status === 'VALID';
-        const badge = isValid ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-damkar-red border-red-200';
+      rows.forEach((r, idx) => {
+        let statusBadge = '';
+        if (r.status === 'VALID') {
+          statusBadge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold border bg-emerald-50 text-emerald-700 border-emerald-200">HADIR VALID</span>';
+        } else if (r.status === 'TERLAMBAT') {
+          statusBadge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold border bg-amber-50 text-amber-700 border-amber-200">TERLAMBAT</span>';
+        } else if (r.status === 'DI LUAR RADIUS') {
+          statusBadge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold border bg-red-50 text-damkar-red border-red-200">DI LUAR RADIUS</span>';
+        } else if (r.status.includes('SAKIT')) {
+          statusBadge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold border bg-blue-50 text-blue-700 border-blue-200">SAKIT</span>';
+        } else if (r.status.includes('IZIN')) {
+          statusBadge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold border bg-indigo-50 text-indigo-700 border-indigo-200">IZIN RESMI</span>';
+        } else if (r.status.includes('CUTI')) {
+          statusBadge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold border bg-purple-50 text-purple-700 border-purple-200">CUTI</span>';
+        } else if (r.status.includes('DINAS')) {
+          statusBadge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold border bg-teal-50 text-teal-700 border-teal-200">DINAS LUAR</span>';
+        } else {
+          statusBadge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold border bg-slate-100 text-slate-700 border-slate-300">ALFA</span>';
+        }
+
+        const terlambatText = r.terlambat > 0 
+          ? `<span class="px-2 py-0.5 bg-amber-100 text-amber-800 rounded font-bold text-[10px]">+${r.terlambat} mnt</span>`
+          : (r.jamMasuk !== '-' ? '<span class="text-emerald-600 font-bold text-[10px]">Tepat Waktu</span>' : '-');
+
+        const cepatPulangText = r.cepatPulang > 0
+          ? `<span class="px-2 py-0.5 bg-orange-100 text-orange-800 rounded font-bold text-[10px]">-${r.cepatPulang} mnt</span>`
+          : (r.jamPulang !== '-' ? '<span class="text-slate-400 text-[10px]">-</span>' : '-');
+
+        const jarakText = typeof r.jarak === 'number' 
+          ? `<span class="font-mono text-[11px]">${r.jarak} m / Max ${r.radius} m</span>` 
+          : '<span class="text-slate-400">-</span>';
+
+        const selfieBtn = r.selfieUrl 
+          ? `<button onclick="openModalSelfie('${r.nama}', '${r.jamMasuk} WIB', '${r.posTugas}', '${r.selfieUrl}')" class="text-damkar-navy hover:text-damkar-red font-bold text-xs p-1" title="Lihat Foto"><i class="fa-solid fa-camera"></i></button>`
+          : '<span class="text-slate-300">-</span>';
+
         const tr = document.createElement('tr');
-        tr.className = 'hover:bg-slate-50 border-b border-slate-100';
+        tr.className = 'hover:bg-slate-50 border-b border-slate-100 transition';
         tr.innerHTML = `
-          <td class="p-3 font-mono">${l.tanggal} ${l.waktu}</td>
-          <td class="p-3 font-mono font-bold">${l.personelNip}</td>
-          <td class="p-3 font-bold text-slate-800">${l.personelNama}</td>
-          <td class="p-3 text-damkar-navy font-semibold">${l.posNama}</td>
-          <td class="p-3 font-mono">${l.jarak} m / Max ${l.radius} m</td>
-          <td class="p-3"><span class="px-2 py-0.5 rounded-full text-[10px] font-bold border ${badge}">${l.status}</span></td>
+          <td class="p-3 text-center text-slate-400 font-mono text-[11px]">${idx + 1}</td>
+          <td class="p-3 font-mono font-bold text-slate-700">${r.nip}</td>
+          <td class="p-3 font-bold text-slate-800">${r.nama}</td>
+          <td class="p-3 text-slate-600 font-medium">${r.jabatan}</td>
+          <td class="p-3 text-damkar-navy font-semibold">${r.posTugas}</td>
+          <td class="p-3 text-center font-mono font-bold ${r.jamMasuk !== '-' ? 'text-slate-800' : 'text-slate-400'}">${r.jamMasuk}</td>
+          <td class="p-3 text-center font-mono font-bold ${r.jamPulang !== '-' ? 'text-slate-800' : 'text-slate-400'}">${r.jamPulang}</td>
+          <td class="p-3 text-center">${terlambatText}</td>
+          <td class="p-3 text-center">${cepatPulangText}</td>
+          <td class="p-3">${jarakText}</td>
+          <td class="p-3 text-center">${statusBadge}</td>
+          <td class="p-3 no-print text-center">${selfieBtn}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function renderRekapBulananView(summaryCards) {
+      const monthSelect = document.getElementById('rekapBulananMonth');
+      const monthNum = monthSelect?.value || '9';
+      const monthName = monthSelect?.options[monthSelect.selectedIndex]?.text || 'September';
+      const year = document.getElementById('rekapBulananYear')?.value || '2026';
+      const unitFilter = document.getElementById('rekapBulananFilterUnit')?.value || 'ALL';
+      const query = (document.getElementById('rekapBulananSearch')?.value || '').toLowerCase().trim();
+      const tbody = document.getElementById('tableRekapBulananBody');
+      tbody.innerHTML = '';
+
+      const hariKerjaEfektif = 22;
+
+      // Compile monthly rows
+      let rows = appState.personelList.map(p => {
+        const stats = appState.monthlyRekap[p.nip] || {
+          hadir: 20,
+          terlambat: 0,
+          cepatPulang: 0,
+          sakit: 1,
+          izin: 0,
+          cuti: 0,
+          alfa: 0,
+          dinasLuar: 1
+        };
+
+        const totalDiakui = stats.hadir + stats.dinasLuar;
+        const persentase = Math.min(100, Math.round((totalDiakui / hariKerjaEfektif) * 100));
+
+        let predikat = 'Sangat Disiplin (A)';
+        let predikatClass = 'bg-emerald-50 text-emerald-700 border-emerald-200';
+        if (persentase >= 95 && stats.terlambat <= 1 && stats.alfa === 0) {
+          predikat = 'Sangat Disiplin (A)';
+          predikatClass = 'bg-emerald-50 text-emerald-700 border-emerald-200';
+        } else if (persentase >= 85 && stats.alfa <= 1) {
+          predikat = 'Baik (B)';
+          predikatClass = 'bg-blue-50 text-blue-700 border-blue-200';
+        } else if (persentase >= 75) {
+          predikat = 'Cukup (C)';
+          predikatClass = 'bg-amber-50 text-amber-700 border-amber-200';
+        } else {
+          predikat = 'Perlu Pembinaan (D)';
+          predikatClass = 'bg-red-50 text-damkar-red border-red-200';
+        }
+
+        return {
+          nip: p.nip,
+          nama: p.nama,
+          jabatan: p.jabatan,
+          unit: p.unit,
+          hadir: stats.hadir,
+          terlambat: stats.terlambat,
+          cepatPulang: stats.cepatPulang,
+          sakit: stats.sakit,
+          izin: stats.izin,
+          cuti: stats.cuti,
+          alfa: stats.alfa,
+          dinasLuar: stats.dinasLuar,
+          totalDiakui: totalDiakui,
+          persentase: persentase,
+          predikat: predikat,
+          predikatClass: predikatClass
+        };
+      });
+
+      // Filter Unit Kerja
+      if (unitFilter !== 'ALL') {
+        rows = rows.filter(r => r.unit === unitFilter);
+      }
+
+      // Filter Query (Nama, NIP, Jabatan)
+      if (query) {
+        rows = rows.filter(r => 
+          r.nama.toLowerCase().includes(query) ||
+          r.nip.includes(query) ||
+          r.jabatan.toLowerCase().includes(query)
+        );
+      }
+
+      // Calculate monthly KPI metrics
+      const totalPegawai = rows.length;
+      const totalHadirAll = rows.reduce((acc, curr) => acc + curr.hadir, 0);
+      const totalTerlambatAll = rows.reduce((acc, curr) => acc + curr.terlambat, 0);
+      const totalCepatPulangAll = rows.reduce((acc, curr) => acc + curr.cepatPulang, 0);
+      const totalSakitAll = rows.reduce((acc, curr) => acc + curr.sakit, 0);
+      const totalIzinAll = rows.reduce((acc, curr) => acc + curr.izin, 0);
+      const totalCutiAll = rows.reduce((acc, curr) => acc + curr.cuti, 0);
+      const totalAlfaAll = rows.reduce((acc, curr) => acc + curr.alfa, 0);
+      const totalDLAll = rows.reduce((acc, curr) => acc + curr.dinasLuar, 0);
+      const avgPersen = totalPegawai > 0 
+        ? Math.round(rows.reduce((acc, curr) => acc + curr.persentase, 0) / totalPegawai) 
+        : 0;
+
+      summaryCards.innerHTML = `
+        <div class="bg-slate-50 border border-slate-200 rounded-xl p-3 text-center">
+          <p class="text-[10px] uppercase font-bold text-slate-500">Periode & Hari Kerja</p>
+          <p class="text-base font-black text-damkar-navy">${monthName.slice(0, 3)} ${year}</p>
+          <span class="text-[10px] text-slate-500 font-bold">${hariKerjaEfektif} Hari Kerja</span>
+        </div>
+        <div class="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-center">
+          <p class="text-[10px] uppercase font-bold text-emerald-700">Rerata Kehadiran</p>
+          <p class="text-xl font-black text-emerald-700">${avgPersen}%</p>
+          <span class="text-[10px] text-emerald-600 font-medium">Total Hadir: ${totalHadirAll} hr</span>
+        </div>
+        <div class="bg-amber-50 border border-amber-200 rounded-xl p-3 text-center">
+          <p class="text-[10px] uppercase font-bold text-amber-700">Total Terlambat</p>
+          <p class="text-xl font-black text-amber-700">${totalTerlambatAll}</p>
+          <span class="text-[10px] text-amber-600 font-medium">Kasus Keterlambatan</span>
+        </div>
+        <div class="bg-orange-50 border border-orange-200 rounded-xl p-3 text-center">
+          <p class="text-[10px] uppercase font-bold text-orange-700">Cepat Pulang</p>
+          <p class="text-xl font-black text-orange-700">${totalCepatPulangAll}</p>
+          <span class="text-[10px] text-orange-600 font-medium">Pulang Sebelum Jam</span>
+        </div>
+        <div class="bg-blue-50 border border-blue-200 rounded-xl p-3 text-center">
+          <p class="text-[10px] uppercase font-bold text-blue-700">Sakit & Izin</p>
+          <p class="text-xl font-black text-blue-700">${totalSakitAll + totalIzinAll}</p>
+          <span class="text-[10px] text-blue-600 font-medium">S:${totalSakitAll} | I:${totalIzinAll} Hari</span>
+        </div>
+        <div class="bg-purple-50 border border-purple-200 rounded-xl p-3 text-center">
+          <p class="text-[10px] uppercase font-bold text-purple-700">Cuti & Dinas Luar</p>
+          <p class="text-xl font-black text-purple-700">${totalCutiAll + totalDLAll}</p>
+          <span class="text-[10px] text-purple-600 font-medium">C:${totalCutiAll} | DL:${totalDLAll} Hari</span>
+        </div>
+        <div class="bg-red-50 border border-red-200 rounded-xl p-3 text-center">
+          <p class="text-[10px] uppercase font-bold text-red-700">Alfa / Mangkir</p>
+          <p class="text-xl font-black text-red-700">${totalAlfaAll}</p>
+          <span class="text-[10px] text-red-600 font-medium">Hari Tanpa Izin</span>
+        </div>
+      `;
+
+      if (rows.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="16" class="p-8 text-center text-slate-400">Tidak ada rekap bulanan yang cocok dengan filter.</td></tr>';
+        return;
+      }
+
+      rows.forEach((r, idx) => {
+        const tr = document.createElement('tr');
+        tr.className = 'hover:bg-slate-50 border-b border-slate-100 transition';
+        tr.innerHTML = `
+          <td class="p-3 text-center text-slate-400 font-mono text-[11px]">${idx + 1}</td>
+          <td class="p-3 font-mono font-bold text-slate-700">${r.nip}</td>
+          <td class="p-3 font-bold text-slate-800">${r.nama}</td>
+          <td class="p-3 text-slate-600 font-medium">${r.jabatan}</td>
+          <td class="p-3 text-damkar-navy font-semibold">${r.unit}</td>
+          <td class="p-2.5 text-center font-bold text-emerald-800 bg-emerald-50/50">${r.hadir} hr</td>
+          <td class="p-2.5 text-center font-bold text-amber-800 bg-amber-50/50">${r.terlambat > 0 ? r.terlambat + 'x' : '-'}</td>
+          <td class="p-2.5 text-center font-bold text-orange-800 bg-orange-50/50">${r.cepatPulang > 0 ? r.cepatPulang + 'x' : '-'}</td>
+          <td class="p-2.5 text-center font-bold text-blue-800 bg-blue-50/50">${r.sakit > 0 ? r.sakit + ' hr' : '-'}</td>
+          <td class="p-2.5 text-center font-bold text-indigo-800 bg-indigo-50/50">${r.izin > 0 ? r.izin + ' hr' : '-'}</td>
+          <td class="p-2.5 text-center font-bold text-purple-800 bg-purple-50/50">${r.cuti > 0 ? r.cuti + ' hr' : '-'}</td>
+          <td class="p-2.5 text-center font-bold text-red-800 bg-red-50/50">${r.alfa > 0 ? r.alfa + ' hr' : '-'}</td>
+          <td class="p-2.5 text-center font-bold text-teal-800 bg-teal-50/50">${r.dinasLuar > 0 ? r.dinasLuar + ' hr' : '-'}</td>
+          <td class="p-3 text-center">
+            <span class="font-black text-slate-800">${r.persentase}%</span>
+            <div class="w-16 bg-slate-200 rounded-full h-1.5 mx-auto mt-1 overflow-hidden">
+              <div class="h-1.5 rounded-full ${r.persentase >= 90 ? 'bg-emerald-500' : (r.persentase >= 75 ? 'bg-amber-500' : 'bg-red-500')}" style="width: ${r.persentase}%"></div>
+            </div>
+          </td>
+          <td class="p-3 text-center">
+            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold border ${r.predikatClass}">${r.predikat}</span>
+          </td>
           <td class="p-3 no-print text-center">
-            <button onclick="openModalSelfie('${l.personelNama}', '${l.waktu}', '${l.posNama}', '${l.selfieUrl}')" class="text-slate-600 hover:text-damkar-navy font-bold text-xs"><i class="fa-solid fa-image"></i></button>
+            <button onclick="openModalEditMonthly('${r.nip}', '${r.nama}')" class="bg-slate-100 hover:bg-slate-200 text-damkar-navy text-[11px] font-bold px-2 py-1 rounded border border-slate-300 transition flex items-center gap-1 mx-auto" title="Sesuaikan Rekap Personel">
+              <i class="fa-solid fa-sliders"></i> Edit
+            </button>
           </td>
         `;
         tbody.appendChild(tr);
       });
+    }
+
+    // Modal Edit Rekap Bulanan
+    function openModalEditMonthly(nip, nama) {
+      const stats = appState.monthlyRekap[nip] || {
+        hadir: 20, terlambat: 0, cepatPulang: 0, sakit: 0, izin: 0, cuti: 0, alfa: 0, dinasLuar: 0
+      };
+      document.getElementById('editMonthlyNip').value = nip;
+      document.getElementById('modalEditMonthlySub').textContent = `Personel: ${nama} (NIP: ${nip})`;
+      document.getElementById('editMonthlyHadir').value = stats.hadir;
+      document.getElementById('editMonthlyTerlambat').value = stats.terlambat;
+      document.getElementById('editMonthlyCepatPulang').value = stats.cepatPulang;
+      document.getElementById('editMonthlySakit').value = stats.sakit;
+      document.getElementById('editMonthlyIzin').value = stats.izin;
+      document.getElementById('editMonthlyCuti').value = stats.cuti;
+      document.getElementById('editMonthlyAlfa').value = stats.alfa;
+      document.getElementById('editMonthlyDinasLuar').value = stats.dinasLuar;
+      document.getElementById('modalEditMonthly').classList.remove('hidden');
+    }
+
+    function closeModalEditMonthly() {
+      document.getElementById('modalEditMonthly').classList.add('hidden');
+    }
+
+    function saveMonthlyEdit() {
+      const nip = document.getElementById('editMonthlyNip').value;
+      if (!nip) return;
+
+      const hadir = parseInt(document.getElementById('editMonthlyHadir').value) || 0;
+      const terlambat = parseInt(document.getElementById('editMonthlyTerlambat').value) || 0;
+      const cepatPulang = parseInt(document.getElementById('editMonthlyCepatPulang').value) || 0;
+      const sakit = parseInt(document.getElementById('editMonthlySakit').value) || 0;
+      const izin = parseInt(document.getElementById('editMonthlyIzin').value) || 0;
+      const cuti = parseInt(document.getElementById('editMonthlyCuti').value) || 0;
+      const alfa = parseInt(document.getElementById('editMonthlyAlfa').value) || 0;
+      const dinasLuar = parseInt(document.getElementById('editMonthlyDinasLuar').value) || 0;
+
+      appState.monthlyRekap[nip] = {
+        hadir, terlambat, cepatPulang, sakit, izin, cuti, alfa, dinasLuar
+      };
+
+      saveState();
+      addAudit('Penyesuaian Rekap Bulanan', `Mengubah akumulasi presensi personel NIP: ${nip} (Hadir: ${hadir}, TL: ${terlambat}, CP: ${cepatPulang})`);
+      closeModalEditMonthly();
+      renderRekapTable();
+      showToast('Rekapitulasi bulanan personel berhasil disimpan!', 'success');
+    }
+
+    function printRekapReport() {
+      const printDateEl = document.getElementById('printDateGenerated');
+      if (printDateEl) {
+        const now = new Date();
+        printDateEl.textContent = `Dicetak oleh Super Admin Pusat pada: ${now.toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })} pukul ${now.toLocaleTimeString('id-ID')} WIB`;
+      }
+      window.print();
     }
 
     function exportToExcel() {
@@ -1465,40 +2090,160 @@
         showToast('Pustaka SheetJS belum selesai dimuat.', 'error');
         return;
       }
-      const data = appState.logsList.map(l => ({
-        "Tanggal": l.tanggal,
-        "Waktu": l.waktu,
-        "NIP Pegawai": l.personelNip,
-        "Nama Pegawai": l.personelNama,
-        "Titik Pos Sektor": l.posNama,
-        "Jarak (Meter)": l.jarak,
-        "Radius Toleransi (Meter)": l.radius,
-        "Status Geofencing": l.status
-      }));
 
-      const ws = XLSX.utils.json_to_sheet(data);
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, "Rekap Presensi Damkar");
-      XLSX.writeFile(wb, `Rekap_Presensi_Damkar_Subang_${new Date().toISOString().split('T')[0]}.xlsx`);
-      addAudit('Ekspor Laporan Excel', 'Super Admin mengunduh berkas rekapitulasi format .xlsx');
-      showToast('Berkas Excel (.xlsx) berhasil diunduh!', 'success');
+      if (currentRekapMode === 'HARIAN') {
+        const dateVal = document.getElementById('rekapHarianDate')?.value || '2026-09-21';
+        const data = appState.personelList.map(p => {
+          const log = appState.logsList.find(l => l.tanggal === dateVal && l.personelNip === p.nip);
+          const pengajuan = appState.pengajuanList.find(pj => pj.nip === p.nip && pj.status === 'DISETUJUI');
+
+          let jamMasuk = '-';
+          let jamPulang = '-';
+          let terlambat = 0;
+          let cepatPulang = 0;
+          let status = 'ALFA / MANGKIR';
+          let pos = p.unit;
+          let jarak = '-';
+
+          if (log) {
+            jamMasuk = log.jamMasuk || log.waktu.split(' ')[0];
+            jamPulang = log.jamPulang || '16:00:00';
+            terlambat = log.terlambat !== undefined ? log.terlambat : 0;
+            cepatPulang = log.cepatPulang !== undefined ? log.cepatPulang : 0;
+            status = log.status;
+            pos = log.posNama;
+            jarak = log.jarak + ' meter';
+          } else if (pengajuan) {
+            status = pengajuan.jenis;
+          }
+
+          return {
+            "Tanggal": dateVal,
+            "NIP Pegawai": p.nip,
+            "Nama Pegawai": p.nama,
+            "Jabatan": p.jabatan,
+            "Unit / Pos": pos,
+            "Jam Masuk": jamMasuk,
+            "Jam Pulang": jamPulang,
+            "Terlambat (Menit)": terlambat,
+            "Cepat Pulang (Menit)": cepatPulang,
+            "Jarak GPS": jarak,
+            "Status Kehadiran": status
+          };
+        });
+
+        const ws = XLSX.utils.json_to_sheet(data);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Rekap Harian");
+        XLSX.writeFile(wb, `Rekap_Presensi_Harian_Damkar_${dateVal}.xlsx`);
+        addAudit('Ekspor Excel Harian', `Super Admin mengunduh rekap presensi harian ${dateVal}`);
+        showToast('Berkas Excel Rekap Harian (.xlsx) berhasil diunduh!', 'success');
+      } else {
+        const monthSelect = document.getElementById('rekapBulananMonth');
+        const monthName = monthSelect?.options[monthSelect.selectedIndex]?.text || 'September';
+        const year = document.getElementById('rekapBulananYear')?.value || '2026';
+
+        const data = appState.personelList.map(p => {
+          const stats = appState.monthlyRekap[p.nip] || {
+            hadir: 20, terlambat: 0, cepatPulang: 0, sakit: 1, izin: 0, cuti: 0, alfa: 0, dinasLuar: 1
+          };
+          const totalDiakui = stats.hadir + stats.dinasLuar;
+          const persentase = Math.min(100, Math.round((totalDiakui / 22) * 100));
+
+          return {
+            "Bulan": monthName,
+            "Tahun": year,
+            "NIP": p.nip,
+            "Nama Pegawai": p.nama,
+            "Jabatan": p.jabatan,
+            "Unit Kerja": p.unit,
+            "Total Hadir (Hari)": stats.hadir,
+            "Terlambat (Kali)": stats.terlambat,
+            "Cepat Pulang (Kali)": stats.cepatPulang,
+            "Sakit (Hari)": stats.sakit,
+            "Izin (Hari)": stats.izin,
+            "Cuti (Hari)": stats.cuti,
+            "Alfa / Mangkir (Hari)": stats.alfa,
+            "Dinas Luar (Hari)": stats.dinasLuar,
+            "Persentase Kehadiran (%)": persentase + '%'
+          };
+        });
+
+        const ws = XLSX.utils.json_to_sheet(data);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Rekap Bulanan");
+        XLSX.writeFile(wb, `Rekap_Presensi_Bulanan_Damkar_${monthName}_${year}.xlsx`);
+        addAudit('Ekspor Excel Bulanan', `Super Admin mengunduh rekap bulanan periode ${monthName} ${year}`);
+        showToast('Berkas Excel Rekap Bulanan (.xlsx) berhasil diunduh!', 'success');
+      }
     }
 
     function exportToCSV() {
-      let csv = "Tanggal,Waktu,NIP,Nama,Pos Sektor,Jarak (Meter),Radius (Meter),Status\n";
-      appState.logsList.forEach(l => {
-        csv += `"${l.tanggal}","${l.waktu}","${l.personelNip}","${l.personelNama}","${l.posNama}",${l.jarak},${l.radius},"${l.status}"\n`;
-      });
-      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', `Rekap_Presensi_Damkar_Subang_${new Date().toISOString().split('T')[0]}.csv`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      addAudit('Ekspor Laporan CSV', 'Super Admin mengunduh berkas rekapitulasi CSV');
-      showToast('Berkas CSV berhasil diunduh!', 'success');
+      if (currentRekapMode === 'HARIAN') {
+        const dateVal = document.getElementById('rekapHarianDate')?.value || '2026-09-21';
+        let csv = "Tanggal,NIP,Nama,Jabatan,Unit/Pos,Jam Masuk,Jam Pulang,Terlambat (Menit),Cepat Pulang (Menit),Status\n";
+        appState.personelList.forEach(p => {
+          const log = appState.logsList.find(l => l.tanggal === dateVal && l.personelNip === p.nip);
+          const pengajuan = appState.pengajuanList.find(pj => pj.nip === p.nip && pj.status === 'DISETUJUI');
+
+          let jamMasuk = '-';
+          let jamPulang = '-';
+          let terlambat = 0;
+          let cepatPulang = 0;
+          let status = 'ALFA / MANGKIR';
+          let pos = p.unit;
+
+          if (log) {
+            jamMasuk = log.jamMasuk || log.waktu.split(' ')[0];
+            jamPulang = log.jamPulang || '16:00:00';
+            terlambat = log.terlambat !== undefined ? log.terlambat : 0;
+            cepatPulang = log.cepatPulang !== undefined ? log.cepatPulang : 0;
+            status = log.status;
+            pos = log.posNama;
+          } else if (pengajuan) {
+            status = pengajuan.jenis;
+          }
+
+          csv += `"${dateVal}","${p.nip}","${p.nama}","${p.jabatan}","${pos}","${jamMasuk}","${jamPulang}",${terlambat},${cepatPulang},"${status}"\n`;
+        });
+
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', `Rekap_Presensi_Harian_Damkar_${dateVal}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        addAudit('Ekspor CSV Harian', `Super Admin mengunduh rekap presensi CSV harian ${dateVal}`);
+        showToast('Berkas CSV Harian berhasil diunduh!', 'success');
+      } else {
+        const monthSelect = document.getElementById('rekapBulananMonth');
+        const monthName = monthSelect?.options[monthSelect.selectedIndex]?.text || 'September';
+        const year = document.getElementById('rekapBulananYear')?.value || '2026';
+
+        let csv = "Bulan,Tahun,NIP,Nama,Jabatan,Unit Kerja,Hadir (Hari),Terlambat (Kali),Cepat Pulang (Kali),Sakit (Hari),Izin (Hari),Cuti (Hari),Alfa (Hari),Dinas Luar (Hari),Persentase (%)\n";
+        appState.personelList.forEach(p => {
+          const stats = appState.monthlyRekap[p.nip] || {
+            hadir: 20, terlambat: 0, cepatPulang: 0, sakit: 1, izin: 0, cuti: 0, alfa: 0, dinasLuar: 1
+          };
+          const totalDiakui = stats.hadir + stats.dinasLuar;
+          const persentase = Math.min(100, Math.round((totalDiakui / 22) * 100));
+
+          csv += `"${monthName}","${year}","${p.nip}","${p.nama}","${p.jabatan}","${p.unit}",${stats.hadir},${stats.terlambat},${stats.cepatPulang},${stats.sakit},${stats.izin},${stats.cuti},${stats.alfa},${stats.dinasLuar},"${persentase}%"\n`;
+        });
+
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', `Rekap_Presensi_Bulanan_Damkar_${monthName}_${year}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        addAudit('Ekspor CSV Bulanan', `Super Admin mengunduh rekap presensi CSV bulanan ${monthName} ${year}`);
+        showToast('Berkas CSV Bulanan berhasil diunduh!', 'success');
+      }
     }
 
     // ==========================================
@@ -1670,15 +2415,27 @@
         });
       }
 
-      // Rekap Filter Pos
-      const rekapPos = document.getElementById('rekapFilterPos');
-      if (rekapPos) {
-        rekapPos.innerHTML = '<option value="ALL">Semua Titik Pos</option>';
+      // Rekap Harian Filter Pos
+      const rekapHarianPos = document.getElementById('rekapHarianFilterPos');
+      if (rekapHarianPos) {
+        rekapHarianPos.innerHTML = '<option value="ALL">Semua Titik Pos</option>';
         appState.posList.forEach(p => {
           const opt = document.createElement('option');
           opt.value = p.nama;
           opt.textContent = p.nama;
-          rekapPos.appendChild(opt);
+          rekapHarianPos.appendChild(opt);
+        });
+      }
+
+      // Rekap Bulanan Filter Unit Kerja
+      const rekapBulananUnit = document.getElementById('rekapBulananFilterUnit');
+      if (rekapBulananUnit) {
+        rekapBulananUnit.innerHTML = '<option value="ALL">Semua Unit Kerja</option>';
+        appState.unitsList.forEach(u => {
+          const opt = document.createElement('option');
+          opt.value = u.nama;
+          opt.textContent = u.nama;
+          rekapBulananUnit.appendChild(opt);
         });
       }
     }
