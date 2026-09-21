@@ -15,20 +15,20 @@ class OfflineSyncWorker(
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
         try {
-            val db = DamkarDatabase.getDatabase(applicationContext)
-            val dao = db.damkarDao()
-            val pendingList = dao.getPendingSyncAbsensi()
-
-            Log.d("OfflineSyncWorker", "Found ${pendingList.size} pending offline attendances to sync")
-
-            for (item in pendingList) {
-                // In production / backend scenario: post payload to server
-                // Here we verify integrity and mark synced
-                dao.markAbsensiSynced(item.id)
-                Log.d("OfflineSyncWorker", "Synced attendance record #${item.id} (${item.userName})")
+            Log.d("OfflineSyncWorker", "Executing offline sync with Supabase and Room DB...")
+            val result = com.example.util.SupabaseSyncService.syncPendingAbsensiToSupabase(applicationContext)
+            
+            if (result.isSuccess) {
+                Log.d("OfflineSyncWorker", "Offline sync completed successfully: ${result.getOrNull()} items processed")
+                Result.success()
+            } else {
+                Log.w("OfflineSyncWorker", "Offline sync encountered error: ${result.exceptionOrNull()?.message}")
+                if (runAttemptCount < 3) {
+                    Result.retry()
+                } else {
+                    Result.failure()
+                }
             }
-
-            Result.success()
         } catch (e: Exception) {
             Log.e("OfflineSyncWorker", "Sync worker failed", e)
             if (runAttemptCount < 3) {

@@ -94,6 +94,13 @@
           </div>
         </div>
 
+        <!-- Tombol Sinkronisasi Supabase -->
+        <button onclick="openModalSupabase()" class="bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-500 hover:to-teal-600 text-white text-xs font-bold px-3 py-2 rounded-lg shadow-md flex items-center space-x-1.5 transition transform active:scale-95 border border-emerald-400/30">
+          <i class="fa-solid fa-cloud-arrow-up"></i>
+          <span class="hidden sm:inline">Sinkron Supabase</span>
+          <span id="supabaseHeaderBadge" class="w-2 h-2 rounded-full bg-amber-400" title="Status Supabase"></span>
+        </button>
+
         <!-- Tombol Simulator Geofencing -->
         <button onclick="openModalSimulator()" class="bg-gradient-to-r from-damkar-red to-rose-600 hover:from-rose-600 hover:to-damkar-red text-white text-xs font-bold px-3 py-2 rounded-lg shadow-md flex items-center space-x-1.5 transition transform active:scale-95 border border-red-400/30">
           <i class="fa-solid fa-crosshairs animate-pulse"></i>
@@ -119,6 +126,9 @@
         </button>
         <button onclick="switchTab('tab-audit')" id="nav-tab-audit" class="nav-item px-3.5 py-2 rounded-lg font-medium text-slate-300 hover:text-white hover:bg-slate-800/50 flex items-center space-x-2 whitespace-nowrap transition">
           <i class="fa-solid fa-shield-halved"></i><span>5. Audit Log Sistem</span>
+        </button>
+        <button onclick="openModalSupabase()" class="px-3.5 py-2 rounded-lg font-bold text-emerald-400 hover:text-white hover:bg-slate-800/50 flex items-center space-x-2 whitespace-nowrap transition ml-auto">
+          <i class="fa-solid fa-database"></i><span>Supabase Cloud DB</span>
         </button>
       </div>
     </nav>
@@ -662,6 +672,136 @@
   </div>
 
   <!-- ========================================== -->
+  <!-- MODAL: SINKRONISASI SUPABASE CLOUD         -->
+  <!-- ========================================== -->
+  <div id="modalSupabase" class="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-xl w-full p-6 shadow-2xl border border-slate-200 space-y-4 max-h-[90vh] overflow-y-auto custom-scrollbar">
+      <!-- Header -->
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+        <div class="flex items-center space-x-2.5">
+          <div class="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-lg">
+            <i class="fa-solid fa-cloud-bolt"></i>
+          </div>
+          <div>
+            <h3 class="font-black text-sm text-damkar-navy uppercase">Sinkronisasi Database Cloud Supabase</h3>
+            <p class="text-[11px] text-slate-500">Koneksi PostgreSQL REST API & Penyimpanan Terpusat</p>
+          </div>
+        </div>
+        <button onclick="closeModalSupabase()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+      </div>
+
+      <!-- Status Indicator -->
+      <div id="supabaseStatusBanner" class="p-3 rounded-xl border bg-slate-50 border-slate-200 flex items-center justify-between text-xs">
+        <div class="flex items-center space-x-2">
+          <span id="supabaseStatusDot" class="w-2.5 h-2.5 rounded-full bg-amber-400"></span>
+          <span id="supabaseStatusText" class="font-semibold text-slate-700">Mode Lokal (Belum Terkoneksi ke Supabase)</span>
+        </div>
+        <button onclick="openModalSqlViewer()" class="text-[11px] text-damkar-navy font-bold hover:underline flex items-center gap-1">
+          <i class="fa-solid fa-code text-[10px]"></i> Skrip SQL Supabase
+        </button>
+      </div>
+
+      <!-- Form Kredensial Supabase -->
+      <div class="space-y-3 text-xs">
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">
+            Supabase Project URL <span class="text-red-500">*</span>
+          </label>
+          <input type="url" id="inputSupabaseUrl" placeholder="https://xyzproject.supabase.co" class="w-full p-2.5 rounded-lg border border-slate-300 font-mono text-xs focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+          <span class="text-[10px] text-slate-400 block mt-0.5">Dapatkan dari: Supabase Project Settings -> API -> Project URL</span>
+        </div>
+
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">
+            Supabase Public Anon / Service Key <span class="text-red-500">*</span>
+          </label>
+          <input type="password" id="inputSupabaseKey" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." class="w-full p-2.5 rounded-lg border border-slate-300 font-mono text-xs focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+          <span class="text-[10px] text-slate-400 block mt-0.5">Dapatkan dari: Supabase Project Settings -> API -> Project API Keys (anon public)</span>
+        </div>
+
+        <div class="flex items-center justify-between pt-1">
+          <button type="button" onclick="testSupabaseConnection()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold px-3 py-2 rounded-lg text-xs flex items-center gap-1.5 transition">
+            <i class="fa-solid fa-plug text-emerald-600"></i> Tes Koneksi API
+          </button>
+          <button type="button" onclick="saveSupabaseConfig()" class="bg-damkar-navy hover:bg-damkar-navyDark text-white font-bold px-4 py-2 rounded-lg text-xs flex items-center gap-1.5 shadow-sm transition">
+            <i class="fa-solid fa-floppy-disk"></i> Simpan Pengaturan
+          </button>
+        </div>
+      </div>
+
+      <!-- Aksi Sinkronisasi Data -->
+      <div class="p-3.5 bg-emerald-50/60 rounded-xl border border-emerald-200/80 space-y-2.5 text-xs">
+        <h4 class="font-bold text-emerald-900 flex items-center gap-1.5">
+          <i class="fa-solid fa-arrows-rotate text-emerald-600"></i> Operasi Sinkronisasi Dua Arah:
+        </h4>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+          <button onclick="syncLocalToSupabase()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold p-2.5 rounded-lg shadow flex items-center justify-center gap-1.5 transition">
+            <i class="fa-solid fa-cloud-arrow-up"></i> Unggah Lokal ke Supabase
+          </button>
+          <button onclick="syncSupabaseToLocal()" class="bg-damkar-navy hover:bg-damkar-navyDark text-white font-bold p-2.5 rounded-lg shadow flex items-center justify-center gap-1.5 transition">
+            <i class="fa-solid fa-cloud-arrow-down"></i> Tarik Data dari Supabase
+          </button>
+        </div>
+        <p class="text-[10px] text-emerald-800 italic">
+          * Sinkronisasi mencakup tabel: <b>pos_sektor</b>, <b>personel</b>, <b>personel_pos_penugasan</b>, <b>presensi_log</b>, dan <b>audit_log</b>.
+        </p>
+      </div>
+
+      <!-- Log Aktivitas Sync Realtime -->
+      <div class="space-y-1 text-xs">
+        <span class="font-semibold text-slate-600">Catatan Proses Sinkronisasi:</span>
+        <div id="supabaseSyncLogBox" class="p-2.5 bg-slate-900 text-slate-200 rounded-lg font-mono text-[11px] h-24 overflow-y-auto custom-scrollbar">
+          [System Ready] Menunggu perintah sinkronisasi...
+        </div>
+      </div>
+
+      <div class="flex justify-end pt-2 border-t border-slate-100">
+        <button onclick="closeModalSupabase()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs rounded-lg transition">
+          Tutup
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- MODAL: SKRIP SQL MIGRASI SUPABASE          -->
+  <!-- ========================================== -->
+  <div id="modalSqlViewer" class="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl border border-slate-200 space-y-4 max-h-[90vh] flex flex-col">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+        <div class="flex items-center space-x-2">
+          <div class="w-8 h-8 rounded-lg bg-blue-100 text-damkar-navy flex items-center justify-center font-bold">
+            <i class="fa-solid fa-database"></i>
+          </div>
+          <div>
+            <h3 class="font-bold text-sm text-slate-800">Skrip SQL Migrasi Tabel & Fungsi Supabase</h3>
+            <p class="text-[11px] text-slate-500">Salin skrip berikut ke SQL Editor di dashboard Supabase</p>
+          </div>
+        </div>
+        <button onclick="closeModalSqlViewer()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+      </div>
+
+      <div class="text-xs bg-amber-50 text-amber-900 p-2.5 rounded-lg border border-amber-200 flex items-start gap-2">
+        <i class="fa-solid fa-lightbulb text-amber-500 mt-0.5"></i>
+        <span><b>Langkah:</b> Buka <a href="https://app.supabase.com" target="_blank" class="underline font-bold text-damkar-navy">app.supabase.com</a> &rarr; Pilih Project &rarr; Buka <b>SQL Editor</b> &rarr; Tempel (Paste) kode di bawah ini &rarr; Klik <b>RUN</b>.</span>
+      </div>
+
+      <div class="flex-1 overflow-hidden relative rounded-xl border border-slate-300">
+        <textarea id="supabaseSqlTextarea" readonly class="w-full h-72 p-3 bg-slate-900 text-emerald-400 font-mono text-[11px] leading-relaxed resize-none focus:outline-none custom-scrollbar"></textarea>
+      </div>
+
+      <div class="flex justify-between items-center pt-2 border-t border-slate-100 text-xs">
+        <button onclick="copySupabaseSql()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2 rounded-lg flex items-center gap-1.5 shadow transition">
+          <i class="fa-solid fa-copy"></i> Salin Seluruh Kode SQL
+        </button>
+        <button onclick="closeModalSqlViewer()" class="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg">
+          Tutup
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================== -->
   <!-- TOAST NOTIFICATION CONTAINER               -->
   <!-- ========================================== -->
   <div id="toastNotification" class="fixed bottom-5 right-5 z-50 transform transition-all duration-300 translate-y-20 opacity-0 pointer-events-none">
@@ -786,6 +926,8 @@
       renderRekapTable();
       renderAuditTable();
       populateRekapPosDropdown();
+      updateSupabaseStatusUI();
+      autoInitSupabase();
     });
 
     function startLiveClock() {
@@ -1543,6 +1685,436 @@
       setTimeout(() => {
         toast.classList.add('translate-y-20', 'opacity-0', 'pointer-events-none');
       }, 3500);
+    }
+
+    // ==========================================
+    // MODUL: SUPABASE CLOUD DATABASE SYNC ENGINE
+    // ==========================================
+    const DEFAULT_SUPABASE_URL = 'https://bvwytjegsajxuhztlqfw.supabase.co';
+    const DEFAULT_SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ2d3l0amVnc2FqeHVoenRscWZ3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk5NzE4NzksImV4cCI6MjEwNTU0Nzg3OX0.EQM9pr1qu0giDfep0Youm9rqdcPM3hcP1mRfLaI72pY';
+
+    let storedSupabaseConfig = JSON.parse(localStorage.getItem('damkar_supabase_config')) || {};
+    let supabaseConfig = {
+      url: storedSupabaseConfig.url || DEFAULT_SUPABASE_URL,
+      key: storedSupabaseConfig.key || DEFAULT_SUPABASE_KEY,
+      connected: storedSupabaseConfig.connected ?? true
+    };
+    // Persist default config
+    localStorage.setItem('damkar_supabase_config', JSON.stringify(supabaseConfig));
+
+    const SUPABASE_SCHEMA_SQL_CODE = `-- =========================================================================
+-- SKRIP MIGRASI DATABASE SUPABASE (POSTGRESQL)
+-- SISTEM PRESENSI DAMKAR SUBANG (YUDHA BRAMA JAYA)
+-- =========================================================================
+CREATE TABLE IF NOT EXISTS pos_sektor (
+    id TEXT PRIMARY KEY,
+    nama TEXT NOT NULL,
+    alamat TEXT DEFAULT '',
+    lat DOUBLE PRECISION NOT NULL,
+    lng DOUBLE PRECISION NOT NULL,
+    radius INTEGER NOT NULL DEFAULT 100,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS personel (
+    id TEXT PRIMARY KEY,
+    nip TEXT UNIQUE NOT NULL,
+    nama TEXT NOT NULL,
+    jabatan TEXT DEFAULT 'Personel Damkar',
+    unit_induk TEXT DEFAULT 'Mako Damkar Pusat Subang',
+    role TEXT DEFAULT 'Pegawai',
+    password_hash TEXT,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS personel_pos_penugasan (
+    personel_id TEXT NOT NULL REFERENCES personel(id) ON DELETE CASCADE,
+    pos_id TEXT NOT NULL REFERENCES pos_sektor(id) ON DELETE CASCADE,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    PRIMARY KEY (personel_id, pos_id)
+);
+
+CREATE TABLE IF NOT EXISTS presensi_log (
+    id TEXT PRIMARY KEY,
+    tanggal DATE NOT NULL DEFAULT CURRENT_DATE,
+    waktu TEXT NOT NULL,
+    user_id TEXT,
+    user_nip TEXT NOT NULL,
+    user_nama TEXT NOT NULL,
+    pos_id TEXT REFERENCES pos_sektor(id) ON DELETE SET NULL,
+    pos_nama TEXT NOT NULL,
+    latitude DOUBLE PRECISION,
+    longitude DOUBLE PRECISION,
+    jarak_meter INTEGER NOT NULL,
+    radius_izin INTEGER NOT NULL,
+    status TEXT NOT NULL,
+    status_kehadiran TEXT DEFAULT 'Hadir Tepat Waktu',
+    keterangan TEXT,
+    foto_selfie_url TEXT,
+    sync_status TEXT DEFAULT 'SYNCED',
+    is_mock_gps BOOLEAN DEFAULT FALSE,
+    is_rooted BOOLEAN DEFAULT FALSE,
+    integrity_signature TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS audit_log (
+    id TEXT PRIMARY KEY,
+    waktu TIMESTAMPTZ DEFAULT NOW(),
+    user_actor TEXT NOT NULL,
+    aksi TEXT NOT NULL,
+    detail TEXT NOT NULL,
+    ip_address TEXT DEFAULT '127.0.0.1'
+);
+
+ALTER TABLE pos_sektor ENABLE ROW LEVEL SECURITY;
+ALTER TABLE personel ENABLE ROW LEVEL SECURITY;
+ALTER TABLE personel_pos_penugasan ENABLE ROW LEVEL SECURITY;
+ALTER TABLE presensi_log ENABLE ROW LEVEL SECURITY;
+ALTER TABLE audit_log ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Allow All pos_sektor" ON pos_sektor FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow All personel" ON personel FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow All penugasan" ON personel_pos_penugasan FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow All presensi" ON presensi_log FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow All audit" ON audit_log FOR ALL USING (true) WITH CHECK (true);
+`;
+
+    function appendSupabaseLog(msg) {
+      const box = document.getElementById('supabaseSyncLogBox');
+      if (!box) return;
+      const now = new Date().toLocaleTimeString('id-ID');
+      box.innerHTML += `\n[${now}] ${msg}`;
+      box.scrollTop = box.scrollHeight;
+    }
+
+    function updateSupabaseStatusUI() {
+      const dot = document.getElementById('supabaseStatusDot');
+      const text = document.getElementById('supabaseStatusText');
+      const headerBadge = document.getElementById('supabaseHeaderBadge');
+
+      if (supabaseConfig.url && supabaseConfig.key && supabaseConfig.connected) {
+        if (dot) { dot.className = 'w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse'; }
+        if (text) { text.textContent = 'Terhubung ke Supabase Cloud: ' + new URL(supabaseConfig.url).hostname; }
+        if (headerBadge) { headerBadge.className = 'w-2 h-2 rounded-full bg-emerald-400'; }
+      } else if (supabaseConfig.url && supabaseConfig.key) {
+        if (dot) { dot.className = 'w-2.5 h-2.5 rounded-full bg-blue-500'; }
+        if (text) { text.textContent = 'Kredensial Tersimpan (Belum Diverifikasi)'; }
+        if (headerBadge) { headerBadge.className = 'w-2 h-2 rounded-full bg-blue-400'; }
+      } else {
+        if (dot) { dot.className = 'w-2.5 h-2.5 rounded-full bg-amber-400'; }
+        if (text) { text.textContent = 'Mode Penyimpanan Lokal (Belum Terkoneksi Supabase)'; }
+        if (headerBadge) { headerBadge.className = 'w-2 h-2 rounded-full bg-amber-400'; }
+      }
+    }
+
+    async function autoInitSupabase() {
+      if (!supabaseConfig.url || !supabaseConfig.key) return;
+      try {
+        const res = await fetch(`${supabaseConfig.url}/rest/v1/pos_sektor?select=id&limit=1`, {
+          method: 'GET',
+          headers: {
+            'apikey': supabaseConfig.key,
+            'Authorization': `Bearer ${supabaseConfig.key}`
+          }
+        });
+        if (res.ok) {
+          supabaseConfig.connected = true;
+          localStorage.setItem('damkar_supabase_config', JSON.stringify(supabaseConfig));
+          updateSupabaseStatusUI();
+          appendSupabaseLog('Terhubung secara otomatis ke Supabase (' + new URL(supabaseConfig.url).hostname + ').');
+        }
+      } catch (e) {
+        console.warn('Auto-init Supabase offline or pending network:', e);
+      }
+    }
+
+    function openModalSupabase() {
+      document.getElementById('inputSupabaseUrl').value = supabaseConfig.url || '';
+      document.getElementById('inputSupabaseKey').value = supabaseConfig.key || '';
+      updateSupabaseStatusUI();
+      document.getElementById('modalSupabase').classList.remove('hidden');
+    }
+
+    function closeModalSupabase() {
+      document.getElementById('modalSupabase').classList.add('hidden');
+    }
+
+    function saveSupabaseConfig() {
+      const url = document.getElementById('inputSupabaseUrl').value.trim().replace(/\/$/, '');
+      const key = document.getElementById('inputSupabaseKey').value.trim();
+
+      if (!url || !key) {
+        showToast('Harap masukkan URL dan Anon Key Supabase!', 'error');
+        return;
+      }
+
+      supabaseConfig.url = url;
+      supabaseConfig.key = key;
+      localStorage.setItem('damkar_supabase_config', JSON.stringify(supabaseConfig));
+      updateSupabaseStatusUI();
+      appendSupabaseLog('Pengaturan Supabase disimpan.');
+      showToast('Kredensial Supabase berhasil disimpan!', 'success');
+    }
+
+    async function testSupabaseConnection() {
+      saveSupabaseConfig();
+      const { url, key } = supabaseConfig;
+      if (!url || !key) return;
+
+      appendSupabaseLog('Menguji koneksi ke ' + url + '...');
+      try {
+        const res = await fetch(`${url}/rest/v1/pos_sektor?select=id&limit=1`, {
+          method: 'GET',
+          headers: {
+            'apikey': key,
+            'Authorization': `Bearer ${key}`
+          }
+        });
+
+        if (res.ok) {
+          supabaseConfig.connected = true;
+          localStorage.setItem('damkar_supabase_config', JSON.stringify(supabaseConfig));
+          updateSupabaseStatusUI();
+          appendSupabaseLog('Sukses! Koneksi REST API ke tabel Supabase pos_sektor valid.');
+          showToast('Koneksi ke Supabase Berhasil Terhubung!', 'success');
+          addAuditEntry('Koneksi Supabase', 'Koneksi ke database cloud Supabase terverifikasi');
+        } else {
+          const errText = await res.text();
+          supabaseConfig.connected = false;
+          updateSupabaseStatusUI();
+          appendSupabaseLog('Koneksi Gagal (' + res.status + '): ' + errText);
+          showToast('Gagal terhubung: Pastikan skrip SQL sudah dijalankan di Supabase!', 'error');
+        }
+      } catch (err) {
+        supabaseConfig.connected = false;
+        updateSupabaseStatusUI();
+        appendSupabaseLog('Error Jaringan: ' + err.message);
+        showToast('Koneksi error: ' + err.message, 'error');
+      }
+    }
+
+    async function syncLocalToSupabase() {
+      const { url, key } = supabaseConfig;
+      if (!url || !key) {
+        showToast('Harap atur URL dan Key Supabase terlebih dahulu!', 'error');
+        openModalSupabase();
+        return;
+      }
+
+      appendSupabaseLog('Memulai sinkronisasi data lokal ke Supabase...');
+      showToast('Sedang mengunggah data ke Supabase...', 'info');
+
+      try {
+        const headers = {
+          'apikey': key,
+          'Authorization': `Bearer ${key}`,
+          'Content-Type': 'application/json',
+          'Prefer': 'resolution=merge-duplicates'
+        };
+
+        // 1. Sinkronisasi Pos Sektor
+        appendSupabaseLog('1/5 Mengunggah ' + appState.posList.length + ' data Pos Sektor...');
+        const resPos = await fetch(`${url}/rest/v1/pos_sektor`, {
+          method: 'POST',
+          headers: headers,
+          body: JSON.stringify(appState.posList.map(p => ({
+            id: p.id,
+            nama: p.nama,
+            alamat: p.alamat || '',
+            lat: p.lat,
+            lng: p.lng,
+            radius: p.radius
+          })))
+        });
+        if (!resPos.ok) throw new Error('Gagal unggah pos_sektor: ' + (await resPos.text()));
+
+        // 2. Sinkronisasi Personel
+        appendSupabaseLog('2/5 Mengunggah ' + appState.personelList.length + ' data Personel...');
+        const resPer = await fetch(`${url}/rest/v1/personel`, {
+          method: 'POST',
+          headers: headers,
+          body: JSON.stringify(appState.personelList.map(p => ({
+            id: p.id,
+            nip: p.nip,
+            nama: p.nama,
+            jabatan: p.jabatan || 'Personel Damkar',
+            unit_induk: p.unit || 'Mako Damkar Pusat Subang',
+            role: p.role || 'Pegawai'
+          })))
+        });
+        if (!resPer.ok) throw new Error('Gagal unggah personel: ' + (await resPer.text()));
+
+        // 3. Sinkronisasi Penugasan Multi-Lokasi
+        const penugasanRows = [];
+        appState.personelList.forEach(p => {
+          (p.posIds || []).forEach(posId => {
+            penugasanRows.push({ personel_id: p.id, pos_id: posId });
+          });
+        });
+        if (penugasanRows.length > 0) {
+          appendSupabaseLog('3/5 Mengunggah ' + penugasanRows.length + ' matriks penugasan...');
+          const resMap = await fetch(`${url}/rest/v1/personel_pos_penugasan`, {
+            method: 'POST',
+            headers: headers,
+            body: JSON.stringify(penugasanRows)
+          });
+          if (!resMap.ok) throw new Error('Gagal unggah penugasan: ' + (await resMap.text()));
+        }
+
+        // 4. Sinkronisasi Presensi Log
+        if (appState.logsList.length > 0) {
+          appendSupabaseLog('4/5 Mengunggah ' + appState.logsList.length + ' data riwayat presensi...');
+          const resLogs = await fetch(`${url}/rest/v1/presensi_log`, {
+            method: 'POST',
+            headers: headers,
+            body: JSON.stringify(appState.logsList.map(l => ({
+              id: l.id,
+              tanggal: l.tanggal || new Date().toISOString().split('T')[0],
+              waktu: l.waktu,
+              user_nip: l.personelNip,
+              user_nama: l.personelNama,
+              pos_nama: l.posNama,
+              jarak_meter: l.jarak || 0,
+              radius_izin: l.radius || 100,
+              status: l.status,
+              foto_selfie_url: l.selfieUrl || '',
+              sync_status: 'SYNCED'
+            })))
+          });
+          if (!resLogs.ok) throw new Error('Gagal unggah presensi_log: ' + (await resLogs.text()));
+        }
+
+        // 5. Sinkronisasi Audit Log
+        if (appState.auditList.length > 0) {
+          appendSupabaseLog('5/5 Mengunggah data audit log...');
+          await fetch(`${url}/rest/v1/audit_log`, {
+            method: 'POST',
+            headers: headers,
+            body: JSON.stringify(appState.auditList.map(a => ({
+              id: a.id,
+              user_actor: a.user,
+              aksi: a.aksi,
+              detail: a.detail
+            })))
+          });
+        }
+
+        appendSupabaseLog('SUKSES: Seluruh data lokal berhasil disinkronkan ke Supabase!');
+        supabaseConfig.connected = true;
+        updateSupabaseStatusUI();
+        showToast('Sinkronisasi ke Supabase Berhasil 100%!', 'success');
+        addAuditEntry('Sinkron Supabase', 'Unggah data lokal ke Supabase PostgreSQL berhasil');
+      } catch (err) {
+        appendSupabaseLog('ERROR Sinkron: ' + err.message);
+        showToast('Sinkronisasi gagal: ' + err.message, 'error');
+      }
+    }
+
+    async function syncSupabaseToLocal() {
+      const { url, key } = supabaseConfig;
+      if (!url || !key) {
+        showToast('Harap atur URL dan Key Supabase terlebih dahulu!', 'error');
+        openModalSupabase();
+        return;
+      }
+
+      appendSupabaseLog('Menarik data dari Supabase ke penyimpanan lokal...');
+      showToast('Mengunduh data terbaru dari Supabase...', 'info');
+
+      try {
+        const headers = {
+          'apikey': key,
+          'Authorization': `Bearer ${key}`
+        };
+
+        // 1. Tarik Pos Sektor
+        const resPos = await fetch(`${url}/rest/v1/pos_sektor?select=*`, { headers });
+        if (!resPos.ok) throw new Error('Gagal unduh pos: ' + (await resPos.text()));
+        const cloudPos = await resPos.json();
+
+        // 2. Tarik Personel
+        const resPer = await fetch(`${url}/rest/v1/personel?select=*`, { headers });
+        if (!resPer.ok) throw new Error('Gagal unduh personel: ' + (await resPer.text()));
+        const cloudPer = await resPer.json();
+
+        // 3. Tarik Matriks Penugasan
+        const resMap = await fetch(`${url}/rest/v1/personel_pos_penugasan?select=*`, { headers });
+        const cloudMap = resMap.ok ? await resMap.json() : [];
+
+        // Gabungkan penugasan pos ke personel
+        const mappedPersonel = cloudPer.map(p => {
+          const posIds = cloudMap.filter(m => m.personel_id === p.id).map(m => m.pos_id);
+          return {
+            id: p.id,
+            nip: p.nip,
+            nama: p.nama,
+            jabatan: p.jabatan,
+            unit: p.unit_induk,
+            role: p.role,
+            posIds: posIds
+          };
+        });
+
+        // 4. Tarik Presensi Log
+        const resLogs = await fetch(`${url}/rest/v1/presensi_log?select=*&order=created_at.desc&limit=100`, { headers });
+        const cloudLogs = resLogs.ok ? await resLogs.json() : [];
+
+        const mappedLogs = cloudLogs.map(l => ({
+          id: l.id,
+          tanggal: l.tanggal,
+          waktu: l.waktu,
+          personelNama: l.user_nama,
+          personelNip: l.user_nip,
+          posNama: l.pos_nama,
+          jarak: l.jarak_meter,
+          radius: l.radius_izin,
+          status: l.status,
+          selfieUrl: l.foto_selfie_url
+        }));
+
+        if (cloudPos.length > 0) appState.posList = cloudPos;
+        if (mappedPersonel.length > 0) appState.personelList = mappedPersonel;
+        if (mappedLogs.length > 0) appState.logsList = mappedLogs;
+
+        saveAppState();
+        renderDashboardStats();
+        renderDashboardLogs();
+        renderPosTable();
+        renderPersonelTable();
+        renderRekapTable();
+        updateDashboardMapMarkers();
+        populateRekapPosDropdown();
+
+        appendSupabaseLog(`SUKSES: Diperbarui ${cloudPos.length} pos, ${mappedPersonel.length} personel, ${mappedLogs.length} riwayat.`);
+        showToast('Data berhasil diperbarui dari Supabase!', 'success');
+        addAuditEntry('Tarik Data Supabase', 'Pembaruan data lokal dari Supabase selesai');
+      } catch (err) {
+        appendSupabaseLog('ERROR Tarik Data: ' + err.message);
+        showToast('Gagal menarik data: ' + err.message, 'error');
+      }
+    }
+
+    function openModalSqlViewer() {
+      document.getElementById('supabaseSqlTextarea').value = SUPABASE_SCHEMA_SQL_CODE;
+      document.getElementById('modalSqlViewer').classList.remove('hidden');
+    }
+
+    function closeModalSqlViewer() {
+      document.getElementById('modalSqlViewer').classList.add('hidden');
+    }
+
+    function copySupabaseSql() {
+      const textarea = document.getElementById('supabaseSqlTextarea');
+      textarea.select();
+      navigator.clipboard.writeText(textarea.value).then(() => {
+        showToast('Kode SQL berhasil disalin ke clipboard!', 'success');
+      }).catch(() => {
+        showToast('Gagal menyalin, silakan salin teks secara manual.', 'error');
+      });
     }
   </script>
 </body>
