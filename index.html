@@ -1,0 +1,2121 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Web Dashboard Superadmin - Presensi Damkar Subang (Yudha Brama Jaya)</title>
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- Font Awesome 6 CDN -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <!-- Leaflet CSS & JS CDN -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            damkar: {
+              navy: '#0C3875',
+              navyDark: '#07244D',
+              navyLight: '#164E96',
+              gold: '#FFB800',
+              goldHover: '#E5A600',
+              goldLight: '#FEF3C7',
+              red: '#DC2626',
+              redDark: '#B91C1C',
+              canvas: '#F8FAFC'
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    @media print {
+      body { background: white !important; font-size: 11pt !important; }
+      .no-print { display: none !important; }
+      .print-only { display: block !important; }
+      .shadow-md, .shadow-lg, .shadow-sm, .shadow-xl { box-shadow: none !important; }
+      .border { border-color: #333 !important; }
+      table { width: 100% !important; border-collapse: collapse !important; }
+      th, td { border: 1px solid #333 !important; padding: 6px !important; }
+    }
+    .print-only { display: none; }
+    .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+    .leaflet-popup-content-wrapper { border-radius: 12px; padding: 4px; }
+  </style>
+</head>
+<body class="bg-damkar-canvas text-slate-800 font-sans min-h-screen flex flex-col antialiased custom-scrollbar">
+
+  <!-- TOP HEADER -->
+  <header class="no-print bg-gradient-to-r from-damkar-navyDark via-damkar-navy to-slate-900 text-white shadow-lg sticky top-0 z-40 border-b border-slate-700/60">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between">
+      <!-- Brand & Subang Identity -->
+      <div class="flex items-center space-x-3.5">
+        <div class="w-11 h-11 rounded-xl bg-gradient-to-br from-damkar-gold via-amber-500 to-damkar-red flex items-center justify-center shadow-md ring-2 ring-white/20">
+          <i class="fa-solid fa-fire-extinguisher text-white text-xl"></i>
+        </div>
+        <div>
+          <div class="flex items-center space-x-2">
+            <h1 class="text-base sm:text-lg font-black tracking-wide text-white uppercase">PRESENSI DAMKAR SUBANG</h1>
+            <span class="bg-damkar-gold text-damkar-navy text-[10px] font-black px-2 py-0.5 rounded-full shadow-sm tracking-wider">SUPERADMIN PUSAT</span>
+          </div>
+          <p class="text-xs text-slate-300 font-medium flex items-center gap-1.5">
+            <span class="text-damkar-gold font-bold">Yudha Brama Jaya</span> • Disdamkar & Penyelamatan Kab. Subang
+          </p>
+        </div>
+      </div>
+
+      <!-- Right Panel: Sesi Superadmin, Jam WIB & Simulator -->
+      <div class="flex items-center space-x-3">
+        <!-- Live Clock -->
+        <div class="hidden md:flex flex-col text-right pr-2 border-r border-slate-700/80">
+          <div id="liveClockWib" class="text-xs font-black tracking-wider text-damkar-gold">--:--:-- WIB</div>
+          <div id="liveDateWib" class="text-[10px] text-slate-300">Memuat tanggal...</div>
+        </div>
+
+        <!-- Superadmin Badge -->
+        <div class="hidden sm:flex items-center space-x-2 bg-slate-800/90 py-1.5 px-3 rounded-lg border border-slate-700 text-xs">
+          <div class="w-6 h-6 rounded-full bg-damkar-gold text-damkar-navy flex items-center justify-center font-bold text-xs">
+            <i class="fa-solid fa-user-shield text-[11px]"></i>
+          </div>
+          <div class="text-left leading-tight">
+            <div class="font-bold text-white text-[11px]">Superadmin</div>
+            <div class="text-[9px] text-emerald-400 font-medium"><i class="fa-solid fa-circle text-[7px] mr-1"></i>Sesi Aktif</div>
+          </div>
+        </div>
+
+        <!-- Tombol Sinkronisasi Supabase -->
+        <button onclick="openModalSupabase()" class="bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-500 hover:to-teal-600 text-white text-xs font-bold px-3 py-2 rounded-lg shadow-md flex items-center space-x-1.5 transition transform active:scale-95 border border-emerald-400/30">
+          <i class="fa-solid fa-cloud-arrow-up"></i>
+          <span class="hidden sm:inline">Sinkron Supabase</span>
+          <span id="supabaseHeaderBadge" class="w-2 h-2 rounded-full bg-amber-400" title="Status Supabase"></span>
+        </button>
+
+        <!-- Tombol Simulator Geofencing -->
+        <button onclick="openModalSimulator()" class="bg-gradient-to-r from-damkar-red to-rose-600 hover:from-rose-600 hover:to-damkar-red text-white text-xs font-bold px-3 py-2 rounded-lg shadow-md flex items-center space-x-1.5 transition transform active:scale-95 border border-red-400/30">
+          <i class="fa-solid fa-crosshairs animate-pulse"></i>
+          <span class="hidden sm:inline">Uji Geofence</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- SUB NAVIGATION TABS -->
+    <nav class="bg-slate-900/80 border-t border-slate-700/60 text-xs font-medium backdrop-blur-sm">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex space-x-1 overflow-x-auto py-1.5">
+        <button onclick="switchTab('tab-ringkasan')" id="nav-tab-ringkasan" class="nav-item active px-3.5 py-2 rounded-lg font-bold text-damkar-gold bg-slate-800/80 border border-damkar-gold/40 flex items-center space-x-2 whitespace-nowrap transition">
+          <i class="fa-solid fa-chart-pie"></i><span>1. Dashboard Ringkasan</span>
+        </button>
+        <button onclick="switchTab('tab-pos')" id="nav-tab-pos" class="nav-item px-3.5 py-2 rounded-lg font-medium text-slate-300 hover:text-white hover:bg-slate-800/50 flex items-center space-x-2 whitespace-nowrap transition">
+          <i class="fa-solid fa-map-location-dot"></i><span>2. Master Pos & Geofence</span>
+        </button>
+        <button onclick="switchTab('tab-personel')" id="nav-tab-personel" class="nav-item px-3.5 py-2 rounded-lg font-medium text-slate-300 hover:text-white hover:bg-slate-800/50 flex items-center space-x-2 whitespace-nowrap transition">
+          <i class="fa-solid fa-users-gear"></i><span>3. Master Personel & Matriks</span>
+        </button>
+        <button onclick="switchTab('tab-rekap')" id="nav-tab-rekap" class="nav-item px-3.5 py-2 rounded-lg font-medium text-slate-300 hover:text-white hover:bg-slate-800/50 flex items-center space-x-2 whitespace-nowrap transition">
+          <i class="fa-solid fa-file-invoice"></i><span>4. Rekapitulasi & Ekspor</span>
+        </button>
+        <button onclick="switchTab('tab-audit')" id="nav-tab-audit" class="nav-item px-3.5 py-2 rounded-lg font-medium text-slate-300 hover:text-white hover:bg-slate-800/50 flex items-center space-x-2 whitespace-nowrap transition">
+          <i class="fa-solid fa-shield-halved"></i><span>5. Audit Log Sistem</span>
+        </button>
+        <button onclick="openModalSupabase()" class="px-3.5 py-2 rounded-lg font-bold text-emerald-400 hover:text-white hover:bg-slate-800/50 flex items-center space-x-2 whitespace-nowrap transition ml-auto">
+          <i class="fa-solid fa-database"></i><span>Supabase Cloud DB</span>
+        </button>
+      </div>
+    </nav>
+  </header>
+
+  <!-- MAIN WRAPPER -->
+  <main class="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
+
+    <!-- ========================================== -->
+    <!-- TAB 1: DASHBOARD RINGKASAN & MONITORING     -->
+    <!-- ========================================== -->
+    <div id="tab-ringkasan" class="tab-pane space-y-6">
+      <!-- Welcome Banner -->
+      <div class="no-print bg-white rounded-2xl p-5 shadow-sm border border-slate-200 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+        <div>
+          <div class="flex items-center space-x-2.5">
+            <span class="w-3 h-3 rounded-full bg-emerald-500 animate-ping"></span>
+            <h2 class="text-base sm:text-lg font-black text-damkar-navy">Sistem Monitoring Terpusat Superadmin</h2>
+          </div>
+          <p class="text-xs text-slate-500 mt-1">
+            Pengawasan multi-sektor pos pemadam kebakaran Kab. Subang secara real-time dengan validasi toleransi GPS Geofencing.
+          </p>
+        </div>
+        <div class="flex items-center gap-2 text-xs">
+          <span class="bg-blue-50 text-damkar-navy px-3 py-1 rounded-lg font-semibold border border-blue-200">
+            <i class="fa-solid fa-building mr-1.5"></i>Wilayah: Kabupaten Subang
+          </span>
+        </div>
+      </div>
+
+      <!-- 4 Kartu Metrik Statistik -->
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <!-- Total Personel -->
+        <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 hover:border-damkar-navy/40 transition">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-semibold text-slate-500">Total Personel</span>
+            <div class="w-8 h-8 rounded-lg bg-blue-50 text-damkar-navy flex items-center justify-center font-bold">
+              <i class="fa-solid fa-users"></i>
+            </div>
+          </div>
+          <div id="statTotalPersonel" class="text-2xl font-black text-slate-800 mt-2">0</div>
+          <div class="text-[11px] text-emerald-600 font-medium mt-1 flex items-center">
+            <i class="fa-solid fa-id-card mr-1"></i>Pegawai & Danru Terdaftar
+          </div>
+        </div>
+
+        <!-- Titik Pos Aktif -->
+        <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 hover:border-damkar-navy/40 transition">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-semibold text-slate-500">Titik Pos Aktif</span>
+            <div class="w-8 h-8 rounded-lg bg-amber-50 text-damkar-gold flex items-center justify-center font-bold">
+              <i class="fa-solid fa-map-pin"></i>
+            </div>
+          </div>
+          <div id="statTotalPos" class="text-2xl font-black text-slate-800 mt-2">0</div>
+          <div class="text-[11px] text-slate-500 font-medium mt-1 flex items-center">
+            <i class="fa-solid fa-tower-broadcast mr-1"></i>Mako + Pos Sektor
+          </div>
+        </div>
+
+        <!-- Persentase Kehadiran -->
+        <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 hover:border-damkar-navy/40 transition">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-semibold text-slate-500">Kehadiran Hari Ini</span>
+            <div class="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
+              <i class="fa-solid fa-user-check"></i>
+            </div>
+          </div>
+          <div id="statKehadiranPersen" class="text-2xl font-black text-slate-800 mt-2">0%</div>
+          <div id="statKehadiranRatio" class="text-[11px] text-slate-500 font-medium mt-1 flex items-center">
+            0 dari 0 personel
+          </div>
+        </div>
+
+        <!-- Personel Multi-Lokasi -->
+        <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 hover:border-damkar-navy/40 transition">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-semibold text-slate-500">Personel Multi-Lokasi</span>
+            <div class="w-8 h-8 rounded-lg bg-red-50 text-damkar-red flex items-center justify-center font-bold">
+              <i class="fa-solid fa-arrows-split-up-and-left"></i>
+            </div>
+          </div>
+          <div id="statMultiLokasi" class="text-2xl font-black text-slate-800 mt-2">0</div>
+          <div class="text-[11px] text-damkar-red font-medium mt-1 flex items-center">
+            <i class="fa-solid fa-circle-check mr-1"></i>Hak Akses >1 Pos
+          </div>
+        </div>
+      </div>
+
+      <!-- Peta Sebaran Pos & Live Attendance Feed -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <!-- Peta Leaflet.js -->
+        <div class="lg:col-span-7 bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
+          <div class="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/70">
+            <div class="flex items-center space-x-2">
+              <i class="fa-solid fa-earth-asia text-damkar-navy"></i>
+              <h3 class="font-bold text-slate-800 text-xs sm:text-sm">Peta Sebaran Titik Geofencing Pos Pemadam</h3>
+            </div>
+            <span class="text-[10px] bg-blue-100 text-damkar-navy px-2 py-0.5 rounded-full font-bold">Radius Transparan Aktif</span>
+          </div>
+          <div id="leafletMapDashboard" class="h-80 w-full z-0"></div>
+          <div class="p-3 bg-slate-50 text-[11px] text-slate-500 flex flex-wrap items-center justify-between gap-2 border-t border-slate-200">
+            <span><i class="fa-solid fa-location-dot text-damkar-red mr-1"></i> Titik Koordinat Pos</span>
+            <span><i class="fa-solid fa-circle text-damkar-navy opacity-40 mr-1"></i> Lingkaran Toleransi Geofence (m)</span>
+            <button onclick="centerMapOnSubang()" class="text-damkar-navy hover:underline font-bold text-[11px]">
+              <i class="fa-solid fa-arrows-to-dot mr-1"></i>Reset Posisi Peta
+            </button>
+          </div>
+        </div>
+
+        <!-- Feed Log Kehadiran Real-time -->
+        <div class="lg:col-span-5 bg-white rounded-2xl shadow-sm border border-slate-200 flex flex-col">
+          <div class="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/70">
+            <div class="flex items-center space-x-2">
+              <i class="fa-solid fa-clock-rotate-left text-damkar-red"></i>
+              <h3 class="font-bold text-slate-800 text-xs sm:text-sm">Log Kehadiran Hari Ini</h3>
+            </div>
+            <button onclick="renderDashboardLogs()" class="text-xs text-damkar-navy hover:underline font-bold flex items-center gap-1">
+              <i class="fa-solid fa-rotate text-[10px]"></i> Refresh
+            </button>
+          </div>
+          <div id="liveLogsContainer" class="p-3 divide-y divide-slate-100 overflow-y-auto max-h-84 custom-scrollbar">
+            <!-- Populated by JS -->
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- TAB 2: MASTER POS SEKTOR & GEOFENCING       -->
+    <!-- ========================================== -->
+    <div id="tab-pos" class="tab-pane hidden space-y-6">
+      <div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-200 space-y-4">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
+          <div>
+            <h2 class="text-base font-bold text-damkar-navy flex items-center gap-2">
+              <i class="fa-solid fa-building-shield text-damkar-red"></i> Master Lokasi Kantor / Pos Sektor & Geofence
+            </h2>
+            <p class="text-xs text-slate-500">Atur koordinat pusat, alamat pos, dan batas radius toleransi kehadiran personel pemadam.</p>
+          </div>
+          <button onclick="resetPosForm()" class="bg-damkar-navy hover:bg-damkar-navyDark text-white text-xs font-bold px-4 py-2 rounded-lg flex items-center gap-1.5 shadow-sm transition">
+            <i class="fa-solid fa-plus"></i> Tambah Pos Baru
+          </button>
+        </div>
+
+        <!-- Form Tambah / Edit Pos Sektor -->
+        <div id="formPosCard" class="p-4 bg-slate-50/80 rounded-xl border border-slate-200 space-y-4">
+          <h3 id="formPosTitle" class="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+            <i class="fa-solid fa-pen-nib text-damkar-gold"></i> Formulir Pos / Lokasi Kantor
+          </h3>
+          <form id="posForm" onsubmit="savePos(event)" class="space-y-4 text-xs">
+            <input type="hidden" id="posId">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label class="block font-semibold text-slate-600 mb-1">Nama Pos / Sektor <span class="text-red-500">*</span></label>
+                <input type="text" id="posNama" required placeholder="Contoh: Pos Sektor Pamanukan" class="w-full p-2.5 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-damkar-navy">
+              </div>
+              <div>
+                <label class="block font-semibold text-slate-600 mb-1">Alamat Ringkas Pos</label>
+                <input type="text" id="posAlamat" placeholder="Contoh: Jl. H. Syahroni No. 18, Pamanukan" class="w-full p-2.5 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-damkar-navy">
+              </div>
+            </div>
+
+            <!-- Koordinat & Tombol GPS -->
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label class="block font-semibold text-slate-600 mb-1">Latitude</label>
+                <input type="number" step="0.000001" id="posLat" required class="w-full p-2.5 rounded-lg border border-slate-300 font-mono focus:ring-2 focus:ring-damkar-navy">
+              </div>
+              <div>
+                <label class="block font-semibold text-slate-600 mb-1">Longitude</label>
+                <input type="number" step="0.000001" id="posLng" required class="w-full p-2.5 rounded-lg border border-slate-300 font-mono focus:ring-2 focus:ring-damkar-navy">
+              </div>
+              <div class="flex items-end">
+                <button type="button" onclick="getCurrentGpsForPosForm()" class="w-full bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold p-2.5 rounded-lg flex items-center justify-center gap-1.5 transition">
+                  <i class="fa-solid fa-location-crosshairs text-damkar-navy"></i> Gunakan Lokasi GPS Saya
+                </button>
+              </div>
+            </div>
+
+            <!-- Slider Radius Geofence -->
+            <div>
+              <div class="flex justify-between items-center mb-1">
+                <label class="font-semibold text-slate-600">Radius Toleransi Geofence</label>
+                <span id="posRadiusLabel" class="font-bold text-damkar-red bg-red-50 px-2 py-0.5 rounded border border-red-200 text-xs">100 Meter</span>
+              </div>
+              <input type="range" id="posRadius" min="20" max="1000" step="10" value="100" oninput="updatePosRadiusDisplay(this.value)" class="w-full accent-damkar-red cursor-pointer">
+              <div class="flex justify-between text-[10px] text-slate-400 mt-0.5">
+                <span>20m (Ketat)</span>
+                <span>250m</span>
+                <span>500m</span>
+                <span>1000m (Maksimal)</span>
+              </div>
+            </div>
+
+            <!-- Peta Interaktif Draggable Marker -->
+            <div>
+              <label class="block font-semibold text-slate-600 mb-1">Pilih Titik di Peta (Geser Pin Marker Merah):</label>
+              <div id="leafletMapPosPicker" class="h-56 w-full rounded-xl border border-slate-300 z-0"></div>
+              <span class="text-[11px] text-slate-500 mt-1 block">
+                <i class="fa-solid fa-circle-info text-damkar-navy mr-1"></i> Klik peta atau geser pin merah untuk memperbarui latitude, longitude, dan radius geofence secara visual.
+              </span>
+            </div>
+
+            <div class="flex justify-end space-x-2 pt-2 border-t border-slate-200">
+              <button type="button" onclick="resetPosForm()" class="px-4 py-2 text-xs text-slate-600 hover:bg-slate-200 rounded-lg">Batal</button>
+              <button type="submit" class="px-5 py-2 text-xs font-bold bg-damkar-navy hover:bg-damkar-navyDark text-white rounded-lg shadow-sm">Simpan Data Pos</button>
+            </div>
+          </form>
+        </div>
+
+        <!-- Tabel Daftar Pos -->
+        <div class="overflow-x-auto">
+          <table class="w-full text-xs text-left text-slate-700">
+            <thead class="text-[11px] uppercase bg-slate-100 text-slate-600 font-bold border-b border-slate-200">
+              <tr>
+                <th class="p-3">Nama Pos / Sektor</th>
+                <th class="p-3">Koordinat GPS</th>
+                <th class="p-3 text-center">Radius Geofence</th>
+                <th class="p-3 text-center">Personel Ditugaskan</th>
+                <th class="p-3 text-center">Aksi Superadmin</th>
+              </tr>
+            </thead>
+            <tbody id="tablePosBody" class="divide-y divide-slate-100">
+              <!-- Populated by JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- TAB 3: MASTER PERSONEL & MATRIKS PENUGASAN -->
+    <!-- ========================================== -->
+    <div id="tab-personel" class="tab-pane hidden space-y-6">
+      <div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-200 space-y-4">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
+          <div>
+            <h2 class="text-base font-bold text-damkar-navy flex items-center gap-2">
+              <i class="fa-solid fa-id-card-clip text-damkar-gold"></i> Master Personel & Matriks Multi-Lokasi (Many-to-Many)
+            </h2>
+            <p class="text-xs text-slate-500">Kelola akun anggota, unit induk, dan otorisasi pos mana saja yang sah dikunjungi oleh personel.</p>
+          </div>
+          <button onclick="resetPersonelForm()" class="bg-damkar-navy hover:bg-damkar-navyDark text-white text-xs font-bold px-4 py-2 rounded-lg flex items-center gap-1.5 shadow-sm transition">
+            <i class="fa-solid fa-user-plus"></i> Tambah Anggota Baru
+          </button>
+        </div>
+
+        <!-- Form Tambah/Edit Personel -->
+        <div id="formPersonelCard" class="p-4 bg-slate-50/80 rounded-xl border border-slate-200 space-y-4 text-xs">
+          <h3 id="formPersonelTitle" class="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+            <i class="fa-solid fa-user-gear text-damkar-navy"></i> Formulir Personel & Hak Akses
+          </h3>
+          <form id="personelForm" onsubmit="savePersonel(event)" class="space-y-4">
+            <input type="hidden" id="personelId">
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              <div>
+                <label class="block font-semibold text-slate-600 mb-1">NIP / NRK <span class="text-red-500">*</span></label>
+                <input type="text" id="personelNip" required placeholder="Contoh: 198805122011011003" class="w-full p-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-damkar-navy">
+              </div>
+              <div>
+                <label class="block font-semibold text-slate-600 mb-1">Nama Lengkap & Gelar <span class="text-red-500">*</span></label>
+                <input type="text" id="personelNama" required placeholder="Contoh: Ahmad Fauzi, S.AP" class="w-full p-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-damkar-navy">
+              </div>
+              <div>
+                <label class="block font-semibold text-slate-600 mb-1">Jabatan Kedinasan</label>
+                <input type="text" id="personelJabatan" placeholder="Contoh: Komandan Regu (Danru)" class="w-full p-2.5 rounded-lg border border-slate-300">
+              </div>
+              <div>
+                <label class="block font-semibold text-slate-600 mb-1">Unit / Pos Induk</label>
+                <input type="text" id="personelUnit" value="Mako Damkar Pusat Subang" class="w-full p-2.5 rounded-lg border border-slate-300">
+              </div>
+              <div>
+                <label class="block font-semibold text-slate-600 mb-1">Role Akun</label>
+                <select id="personelRole" class="w-full p-2.5 rounded-lg border border-slate-300 bg-white">
+                  <option value="Pegawai" selected>Pegawai / Anggota Regu</option>
+                  <option value="Admin Mobile">Admin Regu (Mobile Approval)</option>
+                  <option value="Superadmin">Superadmin</option>
+                </select>
+              </div>
+              <div>
+                <label class="block font-semibold text-slate-600 mb-1">Password Akun Aplikasi</label>
+                <input type="password" id="personelPassword" placeholder="Biarkan kosong jika tidak diubah" class="w-full p-2.5 rounded-lg border border-slate-300">
+              </div>
+            </div>
+
+            <!-- Modul Checklist Multi-Lokasi (Many-to-Many) -->
+            <div class="p-3 bg-white rounded-xl border border-slate-200">
+              <div class="flex items-center justify-between mb-2">
+                <span class="font-bold text-damkar-navy flex items-center gap-1.5">
+                  <i class="fa-solid fa-map-pin text-damkar-red"></i> Otorisasi Pos Penugasan (Centang Pos yang Sah):
+                </span>
+                <div class="space-x-1">
+                  <button type="button" onclick="toggleAllPersonelPos(true)" class="text-[11px] text-damkar-navy font-bold hover:underline">Pilih Semua</button>
+                  <span class="text-slate-300">|</span>
+                  <button type="button" onclick="toggleAllPersonelPos(false)" class="text-[11px] text-slate-500 font-medium hover:underline">Batal Semua</button>
+                </div>
+              </div>
+              <div id="checkboxPersonelPosContainer" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+                <!-- Checkboxes populated by JS -->
+              </div>
+            </div>
+
+            <div class="flex justify-end space-x-2 pt-2 border-t border-slate-200">
+              <button type="button" onclick="resetPersonelForm()" class="px-4 py-2 text-xs text-slate-600 hover:bg-slate-200 rounded-lg">Batal</button>
+              <button type="submit" class="px-5 py-2 text-xs font-bold bg-damkar-navy hover:bg-damkar-navyDark text-white rounded-lg shadow-sm">Simpan Personel</button>
+            </div>
+          </form>
+        </div>
+
+        <!-- Filter & Tabel Data Personel -->
+        <div class="flex flex-col sm:flex-row justify-between items-center gap-3">
+          <div class="w-full sm:w-72">
+            <input type="text" id="searchPersonel" oninput="renderPersonelTable()" placeholder="Cari NIP atau nama personel..." class="w-full p-2 text-xs rounded-lg border border-slate-300">
+          </div>
+          <div class="text-xs text-slate-500">
+            Total Personel: <span id="personelCountBadge" class="font-bold text-slate-800">0</span>
+          </div>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-xs text-left text-slate-700">
+            <thead class="text-[11px] uppercase bg-slate-100 text-slate-600 font-bold border-b border-slate-200">
+              <tr>
+                <th class="p-3">Personel & NIP</th>
+                <th class="p-3">Jabatan & Role</th>
+                <th class="p-3">Pos Induk</th>
+                <th class="p-3">Otorisasi Pos Penugasan (Permitted Geofence)</th>
+                <th class="p-3 text-center">Aksi Superadmin</th>
+              </tr>
+            </thead>
+            <tbody id="tablePersonelBody" class="divide-y divide-slate-100">
+              <!-- Populated by JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- TAB 4: REKAPITULASI & EKSPOR LAPORAN        -->
+    <!-- ========================================== -->
+    <div id="tab-rekap" class="tab-pane hidden space-y-6">
+      <div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-200 space-y-4">
+        <!-- Header & Export Actions -->
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-100 pb-4">
+          <div>
+            <h2 class="text-base font-bold text-damkar-navy flex items-center gap-2">
+              <i class="fa-solid fa-file-excel text-emerald-600"></i> Rekapitulasi Presensi & Ekspor Dokumen
+            </h2>
+            <p class="text-xs text-slate-500">Filter data kehadiran, evaluasi jarak toleransi geofence, cetak surat kedinasan, atau unduh CSV.</p>
+          </div>
+          <div class="flex items-center space-x-2">
+            <button onclick="exportToCsv()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3.5 py-2 rounded-lg flex items-center gap-1.5 shadow-sm transition">
+              <i class="fa-solid fa-file-csv"></i> Ekspor CSV
+            </button>
+            <button onclick="printLaporan()" class="bg-damkar-navy hover:bg-damkar-navyDark text-white text-xs font-bold px-3.5 py-2 rounded-lg flex items-center gap-1.5 shadow-sm transition">
+              <i class="fa-solid fa-print"></i> Cetak Laporan
+            </button>
+          </div>
+        </div>
+
+        <!-- Filter Controls -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs">
+          <div>
+            <label class="block font-semibold text-slate-600 mb-1">Filter Pos Sektor:</label>
+            <select id="filterRekapPos" onchange="renderRekapTable()" class="w-full p-2 rounded-lg border border-slate-300 bg-white">
+              <option value="Semua">Semua Pos Sektor</option>
+            </select>
+          </div>
+          <div>
+            <label class="block font-semibold text-slate-600 mb-1">Filter Status Kehadiran:</label>
+            <select id="filterRekapStatus" onchange="renderRekapTable()" class="w-full p-2 rounded-lg border border-slate-300 bg-white">
+              <option value="Semua">Semua Status (Valid & Ditolak)</option>
+              <option value="VALID">Hanya VALID (Dalam Radius)</option>
+              <option value="DI LUAR RADIUS">Hanya DITOLAK (Di Luar Radius)</option>
+            </select>
+          </div>
+          <div>
+            <label class="block font-semibold text-slate-600 mb-1">Pencarian Nama / NIP:</label>
+            <input type="text" id="filterRekapSearch" oninput="renderRekapTable()" placeholder="Ketik nama atau NIP..." class="w-full p-2 rounded-lg border border-slate-300 bg-white">
+          </div>
+        </div>
+
+        <!-- PRINT HEADER (PRINT-ONLY KOP SURAT) -->
+        <div class="print-only text-center my-4 border-b-2 border-black pb-3">
+          <h2 class="text-sm font-bold uppercase tracking-wider">PEMERINTAH KABUPATEN SUBANG</h2>
+          <h1 class="text-base font-black uppercase">SATUAN POLISI PAMONG PRAJA DAN PEMADAM KEBAKARAN</h1>
+          <p class="text-xs">Jalan Mayjen Sutoyo No. 45, Karanganyar, Subang • Jawa Barat 41211</p>
+          <hr class="border-t-2 border-black my-2">
+          <h3 class="text-xs font-bold uppercase underline">REKAPITULASI DATA PRESENSI GEOFENCING MULTI-LOKASI KANTOR</h3>
+          <p class="text-[10px] italic mt-0.5" id="printDateGenerated">Dicetak pada: -</p>
+        </div>
+
+        <!-- Tabel Rekapitulasi -->
+        <div class="overflow-x-auto">
+          <table id="tableRekap" class="w-full text-xs text-left text-slate-700">
+            <thead class="text-[11px] uppercase bg-slate-100 text-slate-600 font-bold border-b border-slate-200">
+              <tr>
+                <th class="p-3">Waktu Rekam</th>
+                <th class="p-3">Nama Personel / NIP</th>
+                <th class="p-3">Pos Tujuan</th>
+                <th class="p-3 text-center">Jarak ke Pos</th>
+                <th class="p-3 text-center">Radius Izin</th>
+                <th class="p-3 text-center">Status Evaluasi</th>
+                <th class="p-3 text-center no-print">Bukti Swafoto</th>
+              </tr>
+            </thead>
+            <tbody id="tableRekapBody" class="divide-y divide-slate-100">
+              <!-- Populated by JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- TAB 5: AUDIT LOG SISTEM                     -->
+    <!-- ========================================== -->
+    <div id="tab-audit" class="tab-pane hidden space-y-6">
+      <div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-200 space-y-4">
+        <div class="flex items-center justify-between border-b border-slate-100 pb-4">
+          <div>
+            <h2 class="text-base font-bold text-damkar-navy flex items-center gap-2">
+              <i class="fa-solid fa-shield-halved text-damkar-navy"></i> Audit Log Aktivitas & Jejak Sistem
+            </h2>
+            <p class="text-xs text-slate-500">Pencatatan aktivitas perubahan konfigurasi titik pos, penugasan multi-lokasi personel, dan operasi superadmin.</p>
+          </div>
+          <button onclick="clearAuditLog()" class="text-xs text-red-600 hover:underline font-semibold flex items-center gap-1">
+            <i class="fa-solid fa-trash-can text-[11px]"></i> Bersihkan Log
+          </button>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-xs text-left text-slate-700">
+            <thead class="text-[11px] uppercase bg-slate-100 text-slate-600 font-bold border-b border-slate-200">
+              <tr>
+                <th class="p-3">Waktu Audit</th>
+                <th class="p-3">Aktor / User</th>
+                <th class="p-3">Kategori Aksi</th>
+                <th class="p-3">Deskripsi / Detail Perubahan</th>
+              </tr>
+            </thead>
+            <tbody id="tableAuditBody" class="divide-y divide-slate-100">
+              <!-- Populated by JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- ========================================== -->
+  <!-- MODAL: SIMULATOR GEOFENCING MULTI-LOKASI   -->
+  <!-- ========================================== -->
+  <div id="modalSimulator" class="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100 space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+        <div class="flex items-center space-x-2">
+          <div class="w-8 h-8 rounded-lg bg-red-100 text-damkar-red flex items-center justify-center font-bold">
+            <i class="fa-solid fa-crosshairs"></i>
+          </div>
+          <div>
+            <h3 class="font-black text-sm text-damkar-navy uppercase">Simulator Geofence Presensi</h3>
+            <p class="text-[11px] text-slate-500">Uji Coba Validasi Multi-Lokasi & Radius GPS</p>
+          </div>
+        </div>
+        <button onclick="closeModalSimulator()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+      </div>
+
+      <div class="space-y-3 text-xs">
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">1. Pilih Personel / Pegawai:</label>
+          <select id="simPersonelSelect" onchange="onSimulatorPersonelChange()" class="w-full p-2.5 rounded-lg border border-slate-300 font-medium bg-white">
+            <!-- Populated by JS -->
+          </select>
+        </div>
+
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">2. Pilih Pos Tujuan (Sesuai Hak Akses Penugasan):</label>
+          <select id="simPosSelect" onchange="onSimulatorPosChange()" class="w-full p-2.5 rounded-lg border border-slate-300 font-medium bg-white">
+            <!-- Filtered by JS -->
+          </select>
+        </div>
+
+        <div class="p-3 bg-slate-50 rounded-xl border border-slate-200">
+          <div class="flex justify-between items-center mb-1">
+            <span class="font-semibold text-slate-600">Jarak Simulasi dari Pusat Pos:</span>
+            <span id="simJarakValue" class="font-bold text-damkar-red bg-red-50 px-2 py-0.5 rounded border border-red-200 text-xs">45 m</span>
+          </div>
+          <input type="range" id="simJarakInput" min="5" max="300" step="5" value="45" oninput="onSimJarakSlide(this.value)" class="w-full accent-damkar-red cursor-pointer">
+          <div class="flex justify-between text-[10px] text-slate-400">
+            <span>5m (Depan Gerbang)</span>
+            <span id="simRadiusIndicator">Toleransi: 100m</span>
+            <span>300m (Jauh)</span>
+          </div>
+        </div>
+
+        <!-- Live Evaluation Preview Box -->
+        <div id="simPreviewBox" class="p-3 rounded-xl border flex items-center space-x-3 transition">
+          <i id="simPreviewIcon" class="fa-solid fa-circle-check text-2xl text-emerald-500"></i>
+          <div>
+            <div id="simPreviewTitle" class="font-bold text-xs text-emerald-700">STATUS: VALID (Di Dalam Radius)</div>
+            <div id="simPreviewDesc" class="text-[11px] text-slate-500">Jarak 45m berada di bawah batas toleransi 100m. Presensi akan disahkan.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="flex justify-end space-x-2 pt-2 border-t border-slate-100">
+        <button onclick="closeModalSimulator()" class="px-3.5 py-2 text-xs text-slate-600 hover:bg-slate-100 rounded-lg">Batal</button>
+        <button onclick="executeSimulatorPresensi()" class="px-4 py-2 text-xs font-bold bg-damkar-red hover:bg-damkar-redDark text-white rounded-lg shadow-md flex items-center gap-1.5 transition">
+          <i class="fa-solid fa-paper-plane"></i> Kirim Presensi Simulasi
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- MODAL: BUKTI SWAFOTO (SELFIE VIEWER)       -->
+  <!-- ========================================== -->
+  <div id="modalSelfie" class="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-sm w-full p-5 shadow-2xl space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-2">
+        <h3 class="font-bold text-sm text-slate-800 flex items-center gap-1.5">
+          <i class="fa-solid fa-camera text-damkar-navy"></i> Bukti Swafoto Presensi
+        </h3>
+        <button onclick="closeModalSelfie()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+      </div>
+      <div class="flex flex-col items-center">
+        <div class="w-52 h-52 rounded-xl overflow-hidden border-2 border-slate-200 bg-slate-100 flex items-center justify-center shadow-inner">
+          <img id="modalSelfieImg" src="" alt="Bukti Swafoto" class="w-full h-full object-cover">
+        </div>
+        <p id="modalSelfieName" class="text-xs font-bold text-slate-800 mt-2.5">-</p>
+        <p id="modalSelfieTime" class="text-[11px] text-slate-500">-</p>
+      </div>
+      <button onclick="closeModalSelfie()" class="w-full py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg transition">
+        Tutup
+      </button>
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- MODAL: SINKRONISASI SUPABASE CLOUD         -->
+  <!-- ========================================== -->
+  <div id="modalSupabase" class="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-xl w-full p-6 shadow-2xl border border-slate-200 space-y-4 max-h-[90vh] overflow-y-auto custom-scrollbar">
+      <!-- Header -->
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+        <div class="flex items-center space-x-2.5">
+          <div class="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-lg">
+            <i class="fa-solid fa-cloud-bolt"></i>
+          </div>
+          <div>
+            <h3 class="font-black text-sm text-damkar-navy uppercase">Sinkronisasi Database Cloud Supabase</h3>
+            <p class="text-[11px] text-slate-500">Koneksi PostgreSQL REST API & Penyimpanan Terpusat</p>
+          </div>
+        </div>
+        <button onclick="closeModalSupabase()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+      </div>
+
+      <!-- Status Indicator -->
+      <div id="supabaseStatusBanner" class="p-3 rounded-xl border bg-slate-50 border-slate-200 flex items-center justify-between text-xs">
+        <div class="flex items-center space-x-2">
+          <span id="supabaseStatusDot" class="w-2.5 h-2.5 rounded-full bg-amber-400"></span>
+          <span id="supabaseStatusText" class="font-semibold text-slate-700">Mode Lokal (Belum Terkoneksi ke Supabase)</span>
+        </div>
+        <button onclick="openModalSqlViewer()" class="text-[11px] text-damkar-navy font-bold hover:underline flex items-center gap-1">
+          <i class="fa-solid fa-code text-[10px]"></i> Skrip SQL Supabase
+        </button>
+      </div>
+
+      <!-- Form Kredensial Supabase -->
+      <div class="space-y-3 text-xs">
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">
+            Supabase Project URL <span class="text-red-500">*</span>
+          </label>
+          <input type="url" id="inputSupabaseUrl" placeholder="https://xyzproject.supabase.co" class="w-full p-2.5 rounded-lg border border-slate-300 font-mono text-xs focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+          <span class="text-[10px] text-slate-400 block mt-0.5">Dapatkan dari: Supabase Project Settings -> API -> Project URL</span>
+        </div>
+
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">
+            Supabase Public Anon / Service Key <span class="text-red-500">*</span>
+          </label>
+          <input type="password" id="inputSupabaseKey" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." class="w-full p-2.5 rounded-lg border border-slate-300 font-mono text-xs focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+          <span class="text-[10px] text-slate-400 block mt-0.5">Dapatkan dari: Supabase Project Settings -> API -> Project API Keys (anon public)</span>
+        </div>
+
+        <div class="flex items-center justify-between pt-1">
+          <button type="button" onclick="testSupabaseConnection()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold px-3 py-2 rounded-lg text-xs flex items-center gap-1.5 transition">
+            <i class="fa-solid fa-plug text-emerald-600"></i> Tes Koneksi API
+          </button>
+          <button type="button" onclick="saveSupabaseConfig()" class="bg-damkar-navy hover:bg-damkar-navyDark text-white font-bold px-4 py-2 rounded-lg text-xs flex items-center gap-1.5 shadow-sm transition">
+            <i class="fa-solid fa-floppy-disk"></i> Simpan Pengaturan
+          </button>
+        </div>
+      </div>
+
+      <!-- Aksi Sinkronisasi Data -->
+      <div class="p-3.5 bg-emerald-50/60 rounded-xl border border-emerald-200/80 space-y-2.5 text-xs">
+        <h4 class="font-bold text-emerald-900 flex items-center gap-1.5">
+          <i class="fa-solid fa-arrows-rotate text-emerald-600"></i> Operasi Sinkronisasi Dua Arah:
+        </h4>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+          <button onclick="syncLocalToSupabase()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold p-2.5 rounded-lg shadow flex items-center justify-center gap-1.5 transition">
+            <i class="fa-solid fa-cloud-arrow-up"></i> Unggah Lokal ke Supabase
+          </button>
+          <button onclick="syncSupabaseToLocal()" class="bg-damkar-navy hover:bg-damkar-navyDark text-white font-bold p-2.5 rounded-lg shadow flex items-center justify-center gap-1.5 transition">
+            <i class="fa-solid fa-cloud-arrow-down"></i> Tarik Data dari Supabase
+          </button>
+        </div>
+        <p class="text-[10px] text-emerald-800 italic">
+          * Sinkronisasi mencakup tabel: <b>pos_sektor</b>, <b>personel</b>, <b>personel_pos_penugasan</b>, <b>presensi_log</b>, dan <b>audit_log</b>.
+        </p>
+      </div>
+
+      <!-- Log Aktivitas Sync Realtime -->
+      <div class="space-y-1 text-xs">
+        <span class="font-semibold text-slate-600">Catatan Proses Sinkronisasi:</span>
+        <div id="supabaseSyncLogBox" class="p-2.5 bg-slate-900 text-slate-200 rounded-lg font-mono text-[11px] h-24 overflow-y-auto custom-scrollbar">
+          [System Ready] Menunggu perintah sinkronisasi...
+        </div>
+      </div>
+
+      <div class="flex justify-end pt-2 border-t border-slate-100">
+        <button onclick="closeModalSupabase()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs rounded-lg transition">
+          Tutup
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- MODAL: SKRIP SQL MIGRASI SUPABASE          -->
+  <!-- ========================================== -->
+  <div id="modalSqlViewer" class="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl border border-slate-200 space-y-4 max-h-[90vh] flex flex-col">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+        <div class="flex items-center space-x-2">
+          <div class="w-8 h-8 rounded-lg bg-blue-100 text-damkar-navy flex items-center justify-center font-bold">
+            <i class="fa-solid fa-database"></i>
+          </div>
+          <div>
+            <h3 class="font-bold text-sm text-slate-800">Skrip SQL Migrasi Tabel & Fungsi Supabase</h3>
+            <p class="text-[11px] text-slate-500">Salin skrip berikut ke SQL Editor di dashboard Supabase</p>
+          </div>
+        </div>
+        <button onclick="closeModalSqlViewer()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+      </div>
+
+      <div class="text-xs bg-amber-50 text-amber-900 p-2.5 rounded-lg border border-amber-200 flex items-start gap-2">
+        <i class="fa-solid fa-lightbulb text-amber-500 mt-0.5"></i>
+        <span><b>Langkah:</b> Buka <a href="https://app.supabase.com" target="_blank" class="underline font-bold text-damkar-navy">app.supabase.com</a> &rarr; Pilih Project &rarr; Buka <b>SQL Editor</b> &rarr; Tempel (Paste) kode di bawah ini &rarr; Klik <b>RUN</b>.</span>
+      </div>
+
+      <div class="flex-1 overflow-hidden relative rounded-xl border border-slate-300">
+        <textarea id="supabaseSqlTextarea" readonly class="w-full h-72 p-3 bg-slate-900 text-emerald-400 font-mono text-[11px] leading-relaxed resize-none focus:outline-none custom-scrollbar"></textarea>
+      </div>
+
+      <div class="flex justify-between items-center pt-2 border-t border-slate-100 text-xs">
+        <button onclick="copySupabaseSql()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2 rounded-lg flex items-center gap-1.5 shadow transition">
+          <i class="fa-solid fa-copy"></i> Salin Seluruh Kode SQL
+        </button>
+        <button onclick="closeModalSqlViewer()" class="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg">
+          Tutup
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- TOAST NOTIFICATION CONTAINER               -->
+  <!-- ========================================== -->
+  <div id="toastNotification" class="fixed bottom-5 right-5 z-50 transform transition-all duration-300 translate-y-20 opacity-0 pointer-events-none">
+    <div id="toastInner" class="bg-slate-900 text-white text-xs px-4 py-3 rounded-xl shadow-2xl flex items-center space-x-2.5 border border-slate-700">
+      <i id="toastIcon" class="fa-solid fa-circle-check text-emerald-400 text-base"></i>
+      <span id="toastMessage">Pemberitahuan berhasil dimuat!</span>
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- JAVASCRIPT APPLICATION CORE LOGIC          -->
+  <!-- ========================================== -->
+  <script>
+    // ==========================================
+    // SEED DATA BAWAAN REALISTIS
+    // ==========================================
+    const DEFAULT_POS = [
+      { id: "POS-001", nama: "Mako Damkar Pusat Subang", alamat: "Jl. Mayjen Sutoyo No. 45, Karanganyar, Kec. Subang", lat: -6.568285, lng: 107.759415, radius: 120 },
+      { id: "POS-002", nama: "Pos Sektor Pamanukan", alamat: "Jl. H. Syahroni No. 18, Pamanukan, Subang", lat: -6.315420, lng: 107.812350, radius: 100 },
+      { id: "POS-003", nama: "Pos Sektor Jalancagak", alamat: "Jl. Raya Curug Rendeng No. 5, Jalancagak, Subang", lat: -6.674120, lng: 107.678950, radius: 80 },
+      { id: "POS-004", nama: "Pos Sektor Kalijati", alamat: "Jl. Raya Kalijati Barat, Kalijati, Subang", lat: -6.529810, lng: 107.678120, radius: 150 },
+      { id: "POS-005", nama: "Pos Sektor Ciasem", alamat: "Jl. Jenderal Sudirman No. 88, Ciasem, Subang", lat: -6.345890, lng: 107.698710, radius: 100 }
+    ];
+
+    const DEFAULT_PERSONEL = [
+      { id: "PER-001", nip: "198805122011011003", nama: "Ahmad Fauzi, S.AP", jabatan: "Komandan Regu (Danru)", unit: "Mako Damkar Pusat Subang", role: "Admin Mobile", posIds: ["POS-001", "POS-004"] },
+      { id: "PER-002", nip: "199203152015031002", nama: "Budi Pratama, A.Md", jabatan: "Petugas Operator Mobil Pemadam", unit: "Pos Sektor Kalijati", role: "Pegawai", posIds: ["POS-001", "POS-002", "POS-003", "POS-004", "POS-005"] },
+      { id: "PER-003", nip: "199507202020121004", nama: "Dedi Kusnadi", jabatan: "Anggota Tim Rescue & Evakuasi", unit: "Pos Sektor Pamanukan", role: "Pegawai", posIds: ["POS-002", "POS-005"] },
+      { id: "PER-004", nip: "199411082019022001", nama: "Siti Rahmawati, S.Tr.Sos", jabatan: "Staf Administrasi & Data", unit: "Mako Damkar Pusat Subang", role: "Pegawai", posIds: ["POS-001"] }
+    ];
+
+    const DEFAULT_LOGS = [
+      {
+        id: "LOG-001",
+        waktu: "07:28:15 WIB",
+        tanggal: "2026-09-21",
+        personelNama: "Ahmad Fauzi, S.AP",
+        personelNip: "198805122011011003",
+        posNama: "Mako Damkar Pusat Subang",
+        jarak: 42,
+        radius: 120,
+        status: "VALID",
+        selfieUrl: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300&fit=crop&q=80"
+      },
+      {
+        id: "LOG-002",
+        waktu: "07:44:02 WIB",
+        tanggal: "2026-09-21",
+        personelNama: "Budi Pratama, A.Md",
+        personelNip: "199203152015031002",
+        posNama: "Pos Sektor Kalijati",
+        jarak: 85,
+        radius: 150,
+        status: "VALID",
+        selfieUrl: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=300&fit=crop&q=80"
+      },
+      {
+        id: "LOG-003",
+        waktu: "07:55:10 WIB",
+        tanggal: "2026-09-21",
+        personelNama: "Dedi Kusnadi",
+        personelNip: "199507202020121004",
+        posNama: "Pos Sektor Pamanukan",
+        jarak: 320,
+        radius: 100,
+        status: "DI LUAR RADIUS",
+        selfieUrl: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=300&fit=crop&q=80"
+      }
+    ];
+
+    const DEFAULT_AUDIT = [
+      { id: "AUD-001", waktu: "2026-09-21 07:00:12", user: "Superadmin", aksi: "Sistem Dimulai", detail: "Inisialisasi portal Superadmin Geofencing Multi-Lokasi Damkar Subang" },
+      { id: "AUD-002", waktu: "2026-09-21 07:15:40", user: "Superadmin", aksi: "Penugasan Multi-Lokasi", detail: "Personel Budi Pratama diizinkan bertugas pada 5 Pos Sektor" }
+    ];
+
+    // Local Storage State Hydration
+    let appState = {
+      posList: JSON.parse(localStorage.getItem('super_damkar_pos')) || DEFAULT_POS,
+      personelList: JSON.parse(localStorage.getItem('super_damkar_personel')) || DEFAULT_PERSONEL,
+      logsList: JSON.parse(localStorage.getItem('super_damkar_logs')) || DEFAULT_LOGS,
+      auditList: JSON.parse(localStorage.getItem('super_damkar_audit')) || DEFAULT_AUDIT
+    };
+
+    function saveAppState() {
+      localStorage.setItem('super_damkar_pos', JSON.stringify(appState.posList));
+      localStorage.setItem('super_damkar_personel', JSON.stringify(appState.personelList));
+      localStorage.setItem('super_damkar_logs', JSON.stringify(appState.logsList));
+      localStorage.setItem('super_damkar_audit', JSON.stringify(appState.auditList));
+    }
+
+    function addAuditEntry(aksi, detail) {
+      const now = new Date();
+      const timeStr = now.toISOString().split('T')[0] + ' ' + now.toLocaleTimeString('id-ID');
+      appState.auditList.unshift({
+        id: 'AUD-' + Date.now().toString().slice(-4),
+        waktu: timeStr,
+        user: 'Superadmin',
+        aksi: aksi,
+        detail: detail
+      });
+      saveAppState();
+      renderAuditTable();
+    }
+
+    // Leaflet Instances
+    let dashboardMap = null;
+    let dashboardMarkers = [];
+    let posPickerMap = null;
+    let posPickerMarker = null;
+    let posPickerCircle = null;
+
+    // ==========================================
+    // INITIALIZATION ON LOAD
+    // ==========================================
+    window.addEventListener('DOMContentLoaded', () => {
+      startLiveClock();
+      initDashboardMap();
+      renderDashboardStats();
+      renderDashboardLogs();
+      renderPosTable();
+      renderPersonelTable();
+      renderRekapTable();
+      renderAuditTable();
+      populateRekapPosDropdown();
+      updateSupabaseStatusUI();
+      autoInitSupabase();
+    });
+
+    function startLiveClock() {
+      const updateTime = () => {
+        const now = new Date();
+        const timeStr = now.toLocaleTimeString('id-ID') + ' WIB';
+        const dateStr = now.toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+        const clockEl = document.getElementById('liveClockWib');
+        const dateEl = document.getElementById('liveDateWib');
+        const printDateEl = document.getElementById('printDateGenerated');
+        if (clockEl) clockEl.textContent = timeStr;
+        if (dateEl) dateEl.textContent = dateStr;
+        if (printDateEl) printDateEl.textContent = 'Dicetak pada: ' + dateStr + ' ' + timeStr;
+      };
+      updateTime();
+      setInterval(updateTime, 1000);
+    }
+
+    // ==========================================
+    // TAB SWITCHER
+    // ==========================================
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-pane').forEach(el => el.classList.add('hidden'));
+      document.getElementById(tabId).classList.remove('hidden');
+
+      document.querySelectorAll('.nav-item').forEach(el => {
+        el.classList.remove('active', 'text-damkar-gold', 'bg-slate-800/80', 'border', 'border-damkar-gold/40', 'font-bold');
+        el.classList.add('text-slate-300', 'font-medium');
+      });
+
+      const activeBtn = document.getElementById('nav-' + tabId);
+      if (activeBtn) {
+        activeBtn.classList.add('active', 'text-damkar-gold', 'bg-slate-800/80', 'border', 'border-damkar-gold/40', 'font-bold');
+        activeBtn.classList.remove('text-slate-300', 'font-medium');
+      }
+
+      // Handle map container redraw on tab show
+      if (tabId === 'tab-ringkasan' && dashboardMap) {
+        setTimeout(() => dashboardMap.invalidateSize(), 200);
+      }
+      if (tabId === 'tab-pos') {
+        setTimeout(() => {
+          initPosPickerMap();
+          if (posPickerMap) posPickerMap.invalidateSize();
+        }, 200);
+      }
+    }
+
+    // ==========================================
+    // MODUL 1: DASHBOARD RINGKASAN
+    // ==========================================
+    function renderDashboardStats() {
+      document.getElementById('statTotalPersonel').textContent = appState.personelList.length;
+      document.getElementById('statTotalPos').textContent = appState.posList.length;
+
+      const validCount = appState.logsList.filter(l => l.status === 'VALID').length;
+      const total = appState.personelList.length || 1;
+      const pct = Math.min(100, Math.round((validCount / total) * 100));
+      document.getElementById('statKehadiranPersen').textContent = pct + '%';
+      document.getElementById('statKehadiranRatio').textContent = `${validCount} dari ${total} personel`;
+
+      const multiCount = appState.personelList.filter(p => p.posIds && p.posIds.length > 1).length;
+      document.getElementById('statMultiLokasi').textContent = multiCount;
+    }
+
+    function initDashboardMap() {
+      if (dashboardMap) return;
+      // Centered on Subang Regency
+      dashboardMap = L.map('leafletMapDashboard').setView([-6.568285, 107.759415], 11);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap | Disdamkar Subang'
+      }).addTo(dashboardMap);
+
+      updateDashboardMapMarkers();
+    }
+
+    function updateDashboardMapMarkers() {
+      if (!dashboardMap) return;
+      dashboardMarkers.forEach(m => dashboardMap.removeLayer(m));
+      dashboardMarkers = [];
+
+      appState.posList.forEach(pos => {
+        // Red Marker
+        const marker = L.marker([pos.lat, pos.lng]).addTo(dashboardMap);
+        marker.bindPopup(`
+          <div class="text-xs p-1">
+            <div class="font-black text-damkar-navy text-sm mb-0.5">${pos.nama}</div>
+            <p class="text-slate-600 text-[11px] mb-1.5">${pos.alamat}</p>
+            <span class="bg-red-50 text-damkar-red font-bold px-2 py-0.5 rounded border border-red-200 text-[10px]">
+              Toleransi Geofence: ${pos.radius} m
+            </span>
+          </div>
+        `);
+        dashboardMarkers.push(marker);
+
+        // Geofence Circle
+        const circle = L.circle([pos.lat, pos.lng], {
+          color: '#DC2626',
+          fillColor: '#0C3875',
+          fillOpacity: 0.25,
+          radius: pos.radius
+        }).addTo(dashboardMap);
+        dashboardMarkers.push(circle);
+      });
+    }
+
+    function centerMapOnSubang() {
+      if (dashboardMap) {
+        dashboardMap.setView([-6.568285, 107.759415], 11);
+      }
+    }
+
+    function renderDashboardLogs() {
+      const container = document.getElementById('liveLogsContainer');
+      if (appState.logsList.length === 0) {
+        container.innerHTML = `<div class="p-6 text-center text-xs text-slate-400">Belum ada riwayat kehadiran hari ini.</div>`;
+        return;
+      }
+
+      container.innerHTML = appState.logsList.slice(0, 10).map(log => {
+        const isValid = log.status === 'VALID';
+        const badgeClass = isValid ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-700';
+        const iconClass = isValid ? 'fa-circle-check text-emerald-500' : 'fa-circle-xmark text-red-500';
+
+        return `
+          <div class="py-2.5 flex items-center justify-between text-xs hover:bg-slate-50 px-1 rounded-lg transition">
+            <div class="flex items-center space-x-2.5">
+              <i class="fa-solid ${iconClass} text-lg"></i>
+              <div>
+                <div class="font-bold text-slate-800">${log.personelNama}</div>
+                <div class="text-[11px] text-slate-500">${log.posNama} • Jarak: <span class="font-semibold text-slate-700">${log.jarak}m</span> (Max ${log.radius}m)</div>
+              </div>
+            </div>
+            <div class="text-right flex items-center space-x-2">
+              <div>
+                <span class="text-[10px] font-black px-2 py-0.5 rounded-full ${badgeClass}">${log.status}</span>
+                <div class="text-[10px] text-slate-400 mt-0.5">${log.waktu}</div>
+              </div>
+              <button onclick="viewSelfie('${log.selfieUrl}', '${log.personelNama}', '${log.waktu}')" class="text-slate-400 hover:text-damkar-navy p-1 text-sm transition" title="Lihat Foto">
+                <i class="fa-solid fa-camera"></i>
+              </button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // ==========================================
+    // MODUL 2: MASTER POS SEKTOR & GEOFENCING
+    // ==========================================
+    function initPosPickerMap() {
+      if (posPickerMap) return;
+      const initialLat = -6.568285;
+      const initialLng = 107.759415;
+      posPickerMap = L.map('leafletMapPosPicker').setView([initialLat, initialLng], 13);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap'
+      }).addTo(posPickerMap);
+
+      posPickerMarker = L.marker([initialLat, initialLng], { draggable: true }).addTo(posPickerMap);
+      posPickerCircle = L.circle([initialLat, initialLng], {
+        color: '#DC2626',
+        fillColor: '#0C3875',
+        fillOpacity: 0.25,
+        radius: 100
+      }).addTo(posPickerMap);
+
+      posPickerMarker.on('dragend', function (e) {
+        const pos = e.target.getLatLng();
+        document.getElementById('posLat').value = pos.lat.toFixed(6);
+        document.getElementById('posLng').value = pos.lng.toFixed(6);
+        posPickerCircle.setLatLng(pos);
+      });
+
+      posPickerMap.on('click', function (e) {
+        posPickerMarker.setLatLng(e.latlng);
+        posPickerCircle.setLatLng(e.latlng);
+        document.getElementById('posLat').value = e.latlng.lat.toFixed(6);
+        document.getElementById('posLng').value = e.latlng.lng.toFixed(6);
+      });
+
+      document.getElementById('posLat').value = initialLat.toFixed(6);
+      document.getElementById('posLng').value = initialLng.toFixed(6);
+    }
+
+    function updatePosRadiusDisplay(val) {
+      document.getElementById('posRadiusLabel').textContent = val + ' Meter';
+      if (posPickerCircle) {
+        posPickerCircle.setRadius(Number(val));
+      }
+    }
+
+    function getCurrentGpsForPosForm() {
+      if (!navigator.geolocation) {
+        showToast('Browser Anda tidak mendukung fitur Geolocation.', 'error');
+        return;
+      }
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const lat = pos.coords.latitude;
+          const lng = pos.coords.longitude;
+          document.getElementById('posLat').value = lat.toFixed(6);
+          document.getElementById('posLng').value = lng.toFixed(6);
+          if (posPickerMarker && posPickerMap) {
+            posPickerMarker.setLatLng([lat, lng]);
+            posPickerCircle.setLatLng([lat, lng]);
+            posPickerMap.setView([lat, lng], 15);
+          }
+          showToast('Koordinat GPS berhasil diambil dari perangkat!', 'success');
+        },
+        (err) => {
+          showToast('Gagal mengambil GPS: ' + err.message, 'error');
+        }
+      );
+    }
+
+    function renderPosTable() {
+      const tbody = document.getElementById('tablePosBody');
+      tbody.innerHTML = appState.posList.map(pos => {
+        const assignedCount = appState.personelList.filter(p => p.posIds && p.posIds.includes(pos.id)).length;
+
+        return `
+          <tr class="hover:bg-slate-50 transition">
+            <td class="p-3">
+              <div class="font-bold text-slate-800 text-xs">${pos.nama}</div>
+              <div class="text-[11px] text-slate-500">${pos.alamat}</div>
+            </td>
+            <td class="p-3 font-mono text-[11px] text-slate-600">
+              ${pos.lat.toFixed(5)}, ${pos.lng.toFixed(5)}
+            </td>
+            <td class="p-3 text-center">
+              <span class="bg-red-50 text-damkar-red border border-red-200 px-2 py-0.5 rounded-full font-bold text-[10px]">
+                ${pos.radius} m
+              </span>
+            </td>
+            <td class="p-3 text-center">
+              <span class="bg-blue-50 text-damkar-navy px-2.5 py-0.5 rounded font-bold text-[10px]">
+                ${assignedCount} Personel
+              </span>
+            </td>
+            <td class="p-3 text-center space-x-1.5 whitespace-nowrap">
+              <button onclick="editPos('${pos.id}')" class="px-2 py-1 text-slate-600 hover:text-damkar-navy hover:bg-slate-100 rounded text-xs transition">
+                <i class="fa-solid fa-pen-to-square mr-1"></i>Edit
+              </button>
+              <button onclick="deletePos('${pos.id}')" class="px-2 py-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded text-xs transition">
+                <i class="fa-solid fa-trash mr-1"></i>Hapus
+              </button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function savePos(e) {
+      e.preventDefault();
+      const id = document.getElementById('posId').value || ('POS-' + Date.now().toString().slice(-4));
+      const nama = document.getElementById('posNama').value.trim();
+      const alamat = document.getElementById('posAlamat').value.trim() || '-';
+      const lat = parseFloat(document.getElementById('posLat').value);
+      const lng = parseFloat(document.getElementById('posLng').value);
+      const radius = parseInt(document.getElementById('posRadius').value);
+
+      const existingIndex = appState.posList.findIndex(p => p.id === id);
+      if (existingIndex >= 0) {
+        appState.posList[existingIndex] = { id, nama, alamat, lat, lng, radius };
+        addAuditEntry('Edit Pos Sektor', `Memperbarui pos "${nama}" (Radius: ${radius}m)`);
+        showToast(`Pos "${nama}" berhasil diperbarui!`, 'success');
+      } else {
+        appState.posList.push({ id, nama, alamat, lat, lng, radius });
+        addAuditEntry('Tambah Pos Sektor', `Menambahkan pos baru "${nama}" (Radius: ${radius}m)`);
+        showToast(`Pos baru "${nama}" berhasil didaftarkan!`, 'success');
+      }
+
+      saveAppState();
+      renderPosTable();
+      renderDashboardStats();
+      updateDashboardMapMarkers();
+      populateRekapPosDropdown();
+      renderCheckboxPersonelPos();
+      resetPosForm();
+    }
+
+    function editPos(id) {
+      const pos = appState.posList.find(x => x.id === id);
+      if (!pos) return;
+
+      document.getElementById('posId').value = pos.id;
+      document.getElementById('posNama').value = pos.nama;
+      document.getElementById('posAlamat').value = pos.alamat;
+      document.getElementById('posLat').value = pos.lat;
+      document.getElementById('posLng').value = pos.lng;
+      document.getElementById('posRadius').value = pos.radius;
+      updatePosRadiusDisplay(pos.radius);
+
+      document.getElementById('formPosTitle').innerHTML = `<i class="fa-solid fa-pen-nib text-damkar-navy"></i> Edit Pos: ${pos.nama}`;
+
+      if (posPickerMarker && posPickerMap) {
+        posPickerMarker.setLatLng([pos.lat, pos.lng]);
+        posPickerCircle.setLatLng([pos.lat, pos.lng]);
+        posPickerCircle.setRadius(pos.radius);
+        posPickerMap.setView([pos.lat, pos.lng], 15);
+      }
+
+      document.getElementById('formPosCard').scrollIntoView({ behavior: 'smooth' });
+    }
+
+    function deletePos(id) {
+      const pos = appState.posList.find(x => x.id === id);
+      if (!pos) return;
+      if (!confirm(`Yakin ingin menghapus pos "${pos.nama}"?`)) return;
+
+      appState.posList = appState.posList.filter(x => x.id !== id);
+      addAuditEntry('Hapus Pos Sektor', `Menghapus pos "${pos.nama}"`);
+      saveAppState();
+      renderPosTable();
+      renderDashboardStats();
+      updateDashboardMapMarkers();
+      populateRekapPosDropdown();
+      renderCheckboxPersonelPos();
+      showToast(`Pos "${pos.nama}" berhasil dihapus.`, 'info');
+    }
+
+    function resetPosForm() {
+      document.getElementById('posForm').reset();
+      document.getElementById('posId').value = '';
+      document.getElementById('formPosTitle').innerHTML = `<i class="fa-solid fa-pen-nib text-damkar-gold"></i> Formulir Pos / Lokasi Kantor`;
+      updatePosRadiusDisplay(100);
+      if (posPickerMap) {
+        posPickerMap.setView([-6.568285, 107.759415], 13);
+        posPickerMarker.setLatLng([-6.568285, 107.759415]);
+        posPickerCircle.setLatLng([-6.568285, 107.759415]);
+        posPickerCircle.setRadius(100);
+      }
+    }
+
+    // ==========================================
+    // MODUL 3: MASTER PERSONEL & MATRIKS MULTI-LOKASI
+    // ==========================================
+    function renderCheckboxPersonelPos(selectedIds = []) {
+      const container = document.getElementById('checkboxPersonelPosContainer');
+      container.innerHTML = appState.posList.map(pos => {
+        const isChecked = selectedIds.includes(pos.id) ? 'checked' : '';
+        return `
+          <label class="flex items-center space-x-2 p-2 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer text-xs transition">
+            <input type="checkbox" name="personelPosCheck" value="${pos.id}" ${isChecked} class="rounded text-damkar-navy focus:ring-damkar-navy h-4 w-4">
+            <div class="truncate">
+              <span class="font-bold text-slate-800">${pos.nama}</span>
+              <span class="block text-[10px] text-slate-400">Radius: ${pos.radius}m</span>
+            </div>
+          </label>
+        `;
+      }).join('');
+    }
+
+    function toggleAllPersonelPos(check) {
+      document.querySelectorAll('input[name="personelPosCheck"]').forEach(cb => cb.checked = check);
+    }
+
+    function renderPersonelTable() {
+      const search = (document.getElementById('searchPersonel').value || '').toLowerCase();
+      const filtered = appState.personelList.filter(p => {
+        return p.nama.toLowerCase().includes(search) || p.nip.includes(search);
+      });
+
+      document.getElementById('personelCountBadge').textContent = filtered.length;
+      const tbody = document.getElementById('tablePersonelBody');
+
+      if (filtered.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5" class="p-6 text-center text-slate-400">Tidak ada personel yang sesuai pencarian.</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = filtered.map(p => {
+        const posBadges = (p.posIds || []).map(posId => {
+          const pos = appState.posList.find(x => x.id === posId);
+          return pos ? `<span class="inline-block bg-slate-100 text-damkar-navy border border-slate-200 text-[10px] font-bold px-2 py-0.5 rounded-full mr-1 mb-1"><i class="fa-solid fa-map-pin text-damkar-red mr-1"></i>${pos.nama}</span>` : '';
+        }).join('');
+
+        return `
+          <tr class="hover:bg-slate-50 transition">
+            <td class="p-3">
+              <div class="font-bold text-slate-800 text-xs">${p.nama}</div>
+              <div class="text-[11px] text-slate-500 font-mono">NIP: ${p.nip}</div>
+            </td>
+            <td class="p-3">
+              <div class="font-semibold text-slate-700 text-xs">${p.jabatan}</div>
+              <span class="inline-block bg-amber-50 text-amber-800 text-[10px] font-bold px-1.5 py-0.2 rounded border border-amber-200 mt-0.5">${p.role || 'Pegawai'}</span>
+            </td>
+            <td class="p-3 text-slate-600 text-xs">${p.unit}</td>
+            <td class="p-3 max-w-sm">
+              <div class="flex flex-wrap">${posBadges || '<span class="text-xs text-red-500 italic">Belum ada pos diizinkan</span>'}</div>
+            </td>
+            <td class="p-3 text-center space-x-1.5 whitespace-nowrap">
+              <button onclick="editPersonel('${p.id}')" class="px-2 py-1 text-slate-600 hover:text-damkar-navy hover:bg-slate-100 rounded text-xs transition">
+                <i class="fa-solid fa-pen-to-square mr-1"></i>Edit
+              </button>
+              <button onclick="deletePersonel('${p.id}')" class="px-2 py-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded text-xs transition">
+                <i class="fa-solid fa-trash mr-1"></i>Hapus
+              </button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+      renderCheckboxPersonelPos();
+    }
+
+    function savePersonel(e) {
+      e.preventDefault();
+      const id = document.getElementById('personelId').value || ('PER-' + Date.now().toString().slice(-4));
+      const nip = document.getElementById('personelNip').value.trim();
+      const nama = document.getElementById('personelNama').value.trim();
+      const jabatan = document.getElementById('personelJabatan').value.trim() || 'Personel Damkar';
+      const unit = document.getElementById('personelUnit').value.trim() || 'Mako Damkar Pusat Subang';
+      const role = document.getElementById('personelRole').value;
+
+      const checkedPos = Array.from(document.querySelectorAll('input[name="personelPosCheck"]:checked')).map(cb => cb.value);
+
+      if (checkedPos.length === 0) {
+        if (!confirm('Peringatan: Anggota ini tidak memiliki satupun pos yang diotorisasi. Personel tidak akan bisa presensi di pos manapun. Lanjutkan?')) {
+          return;
+        }
+      }
+
+      const existingIndex = appState.personelList.findIndex(p => p.id === id);
+      if (existingIndex >= 0) {
+        appState.personelList[existingIndex] = { id, nip, nama, jabatan, unit, role, posIds: checkedPos };
+        addAuditEntry('Edit Personel & Matriks', `Memperbarui penugasan "${nama}" (${checkedPos.length} pos diizinkan)`);
+        showToast(`Data personel "${nama}" diperbarui!`, 'success');
+      } else {
+        appState.personelList.push({ id, nip, nama, jabatan, unit, role, posIds: checkedPos });
+        addAuditEntry('Tambah Personel Baru', `Mendaftarkan personel "${nama}" NIP: ${nip}`);
+        showToast(`Personel baru "${nama}" berhasil didaftarkan!`, 'success');
+      }
+
+      saveAppState();
+      renderPersonelTable();
+      renderPosTable();
+      renderDashboardStats();
+      resetPersonelForm();
+    }
+
+    function editPersonel(id) {
+      const p = appState.personelList.find(x => x.id === id);
+      if (!p) return;
+
+      document.getElementById('personelId').value = p.id;
+      document.getElementById('personelNip').value = p.nip;
+      document.getElementById('personelNama').value = p.nama;
+      document.getElementById('personelJabatan').value = p.jabatan;
+      document.getElementById('personelUnit').value = p.unit;
+      document.getElementById('personelRole').value = p.role || 'Pegawai';
+      renderCheckboxPersonelPos(p.posIds || []);
+
+      document.getElementById('formPersonelTitle').innerHTML = `<i class="fa-solid fa-user-gear text-damkar-navy"></i> Edit Penugasan: ${p.nama}`;
+      document.getElementById('formPersonelCard').scrollIntoView({ behavior: 'smooth' });
+    }
+
+    function deletePersonel(id) {
+      const p = appState.personelList.find(x => x.id === id);
+      if (!p) return;
+      if (!confirm(`Yakin ingin menghapus personel "${p.nama}"?`)) return;
+
+      appState.personelList = appState.personelList.filter(x => x.id !== id);
+      addAuditEntry('Hapus Personel', `Menghapus personel "${p.nama}"`);
+      saveAppState();
+      renderPersonelTable();
+      renderPosTable();
+      renderDashboardStats();
+      showToast(`Personel "${p.nama}" berhasil dihapus.`, 'info');
+    }
+
+    function resetPersonelForm() {
+      document.getElementById('personelForm').reset();
+      document.getElementById('personelId').value = '';
+      document.getElementById('formPersonelTitle').innerHTML = `<i class="fa-solid fa-user-gear text-damkar-navy"></i> Formulir Personel & Hak Akses`;
+      renderCheckboxPersonelPos();
+    }
+
+    // ==========================================
+    // MODUL 4: REKAPITULASI & EKSPOR LAPORAN
+    // ==========================================
+    function populateRekapPosDropdown() {
+      const select = document.getElementById('filterRekapPos');
+      if (!select) return;
+      select.innerHTML = `<option value="Semua">Semua Pos Sektor</option>` +
+        appState.posList.map(pos => `<option value="${pos.nama}">${pos.nama}</option>`).join('');
+    }
+
+    function renderRekapTable() {
+      const posFilter = document.getElementById('filterRekapPos').value;
+      const statusFilter = document.getElementById('filterRekapStatus').value;
+      const search = (document.getElementById('filterRekapSearch').value || '').toLowerCase();
+
+      const filtered = appState.logsList.filter(log => {
+        const matchPos = posFilter === 'Semua' || log.posNama === posFilter;
+        const matchStatus = statusFilter === 'Semua' || log.status === statusFilter;
+        const matchSearch = log.personelNama.toLowerCase().includes(search) || log.personelNip.includes(search);
+        return matchPos && matchStatus && matchSearch;
+      });
+
+      const tbody = document.getElementById('tableRekapBody');
+      if (filtered.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="7" class="text-center p-6 text-slate-400">Tidak ada catatan presensi yang sesuai kriteria.</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = filtered.map(log => {
+        const isValid = log.status === 'VALID';
+        const badgeClass = isValid ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-700';
+
+        return `
+          <tr class="hover:bg-slate-50 transition">
+            <td class="p-3 text-slate-600 font-mono text-[11px]">${log.tanggal} ${log.waktu}</td>
+            <td class="p-3">
+              <div class="font-bold text-slate-800">${log.personelNama}</div>
+              <div class="text-[10px] text-slate-400 font-mono">NIP: ${log.personelNip}</div>
+            </td>
+            <td class="p-3 font-semibold text-slate-700">${log.posNama}</td>
+            <td class="p-3 text-center font-bold ${isValid ? 'text-emerald-600' : 'text-red-600'}">${log.jarak} m</td>
+            <td class="p-3 text-center text-slate-500">${log.radius} m</td>
+            <td class="p-3 text-center">
+              <span class="text-[10px] font-black px-2 py-0.5 rounded-full ${badgeClass}">${log.status}</span>
+            </td>
+            <td class="p-3 text-center no-print">
+              <button onclick="viewSelfie('${log.selfieUrl}', '${log.personelNama}', '${log.waktu}')" class="text-xs text-damkar-navy hover:underline font-bold">
+                <i class="fa-solid fa-camera mr-1"></i>Lihat Foto
+              </button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function exportToCsv() {
+      if (appState.logsList.length === 0) {
+        showToast('Tidak ada data riwayat presensi untuk diekspor.', 'error');
+        return;
+      }
+
+      let csv = "data:text/csv;charset=utf-8,";
+      csv += "Tanggal,Waktu,NIP,Nama Personel,Pos Tujuan,Jarak (m),Radius Toleransi (m),Status Evaluasi\n";
+
+      appState.logsList.forEach(l => {
+        csv += `"${l.tanggal}","${l.waktu}","${l.personelNip}","${l.personelNama}","${l.posNama}",${l.jarak},${l.radius},"${l.status}"\n`;
+      });
+
+      const encodedUri = encodeURI(csv);
+      const link = document.createElement("a");
+      link.setAttribute("href", encodedUri);
+      link.setAttribute("download", `Rekap_Presensi_Damkar_Subang_${Date.now()}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      addAuditEntry('Ekspor CSV', `Mengunduh file rekap presensi CSV (${appState.logsList.length} data)`);
+      showToast('Berkas CSV berhasil diunduh!', 'success');
+    }
+
+    function printLaporan() {
+      addAuditEntry('Cetak Laporan', 'Mencetak dokumen rekapitulasi presensi');
+      window.print();
+    }
+
+    // ==========================================
+    // MODUL 5: AUDIT LOG SISTEM
+    // ==========================================
+    function renderAuditTable() {
+      const tbody = document.getElementById('tableAuditBody');
+      if (appState.auditList.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="4" class="p-6 text-center text-slate-400">Belum ada catatan audit.</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = appState.auditList.map(a => {
+        return `
+          <tr class="hover:bg-slate-50 transition text-xs">
+            <td class="p-3 text-slate-500 font-mono text-[11px]">${a.waktu}</td>
+            <td class="p-3 font-bold text-slate-800">${a.user}</td>
+            <td class="p-3">
+              <span class="bg-blue-50 text-damkar-navy px-2 py-0.5 rounded font-bold text-[10px] border border-blue-200">${a.aksi}</span>
+            </td>
+            <td class="p-3 text-slate-600">${a.detail}</td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function clearAuditLog() {
+      if (!confirm('Yakin ingin membersihkan riwayat audit log?')) return;
+      appState.auditList = [];
+      saveAppState();
+      renderAuditTable();
+      showToast('Riwayat audit berhasil dibersihkan.', 'info');
+    }
+
+    // ==========================================
+    // MODAL: SIMULATOR GEOFENCING PRESENSI
+    // ==========================================
+    function openModalSimulator() {
+      const selectPersonel = document.getElementById('simPersonelSelect');
+      selectPersonel.innerHTML = appState.personelList.map(p => {
+        const count = (p.posIds || []).length;
+        return `<option value="${p.id}">${p.nama} (${count} Pos Diizinkan)</option>`;
+      }).join('');
+
+      onSimulatorPersonelChange();
+      document.getElementById('modalSimulator').classList.remove('hidden');
+    }
+
+    function closeModalSimulator() {
+      document.getElementById('modalSimulator').classList.add('hidden');
+    }
+
+    function onSimulatorPersonelChange() {
+      const pId = document.getElementById('simPersonelSelect').value;
+      const p = appState.personelList.find(x => x.id === pId);
+      const selectPos = document.getElementById('simPosSelect');
+
+      if (!p || !p.posIds || p.posIds.length === 0) {
+        selectPos.innerHTML = `<option value="">-- Personel ini tidak memiliki pos yang sah --</option>`;
+        updateSimulatorEvaluation();
+        return;
+      }
+
+      const allowedPos = appState.posList.filter(pos => p.posIds.includes(pos.id));
+      selectPos.innerHTML = allowedPos.map(pos => {
+        return `<option value="${pos.id}">${pos.nama} (Radius: ${pos.radius}m)</option>`;
+      }).join('');
+
+      onSimulatorPosChange();
+    }
+
+    function onSimulatorPosChange() {
+      const posId = document.getElementById('simPosSelect').value;
+      const pos = appState.posList.find(x => x.id === posId);
+      if (pos) {
+        document.getElementById('simRadiusIndicator').textContent = `Toleransi: ${pos.radius}m`;
+      }
+      updateSimulatorEvaluation();
+    }
+
+    function onSimJarakSlide(val) {
+      document.getElementById('simJarakValue').textContent = val + ' m';
+      updateSimulatorEvaluation();
+    }
+
+    function updateSimulatorEvaluation() {
+      const posId = document.getElementById('simPosSelect').value;
+      const pos = appState.posList.find(x => x.id === posId);
+      const jarak = parseInt(document.getElementById('simJarakInput').value);
+
+      const box = document.getElementById('simPreviewBox');
+      const icon = document.getElementById('simPreviewIcon');
+      const title = document.getElementById('simPreviewTitle');
+      const desc = document.getElementById('simPreviewDesc');
+
+      if (!pos) {
+        box.className = 'p-3 rounded-xl border bg-red-50 border-red-200 flex items-center space-x-3';
+        icon.className = 'fa-solid fa-triangle-exclamation text-2xl text-red-500';
+        title.className = 'font-bold text-xs text-red-700';
+        title.textContent = 'STATUS: DITOLAK (Tidak Berhak di Pos Ini)';
+        desc.textContent = 'Personel tidak memiliki surat tugas/otorisasi di pos terpilih.';
+        return;
+      }
+
+      if (jarak <= pos.radius) {
+        box.className = 'p-3 rounded-xl border bg-emerald-50 border-emerald-200 flex items-center space-x-3';
+        icon.className = 'fa-solid fa-circle-check text-2xl text-emerald-500';
+        title.className = 'font-bold text-xs text-emerald-700';
+        title.textContent = 'STATUS: VALID (Di Dalam Radius Toleransi)';
+        desc.textContent = `Jarak ${jarak}m <= ${pos.radius}m. Presensi absensi akan diterima sah.`;
+      } else {
+        box.className = 'p-3 rounded-xl border bg-red-50 border-red-200 flex items-center space-x-3';
+        icon.className = 'fa-solid fa-circle-xmark text-2xl text-red-500';
+        title.className = 'font-bold text-xs text-red-700';
+        title.textContent = 'STATUS: DI LUAR RADIUS (Ditolak Sistem)';
+        desc.textContent = `Jarak ${jarak}m melebihi batas toleransi ${pos.radius}m.`;
+      }
+    }
+
+    function executeSimulatorPresensi() {
+      const pId = document.getElementById('simPersonelSelect').value;
+      const posId = document.getElementById('simPosSelect').value;
+      const jarak = parseInt(document.getElementById('simJarakInput').value);
+
+      const p = appState.personelList.find(x => x.id === pId);
+      const pos = appState.posList.find(x => x.id === posId);
+
+      if (!p || !pos) {
+        showToast('Pilih personel dan pos tujuan yang valid!', 'error');
+        return;
+      }
+
+      const isValid = jarak <= pos.radius;
+      const status = isValid ? 'VALID' : 'DI LUAR RADIUS';
+
+      const now = new Date();
+      const newLog = {
+        id: 'LOG-' + Date.now().toString().slice(-4),
+        waktu: now.toLocaleTimeString('id-ID') + ' WIB',
+        tanggal: now.toISOString().split('T')[0],
+        personelNama: p.nama,
+        personelNip: p.nip,
+        posNama: pos.nama,
+        jarak: jarak,
+        radius: pos.radius,
+        status: status,
+        selfieUrl: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300&fit=crop&q=80"
+      };
+
+      appState.logsList.unshift(newLog);
+      addAuditEntry('Simulasi Presensi', `Personel ${p.nama} simulasi di ${pos.nama} (Jarak: ${jarak}m -> ${status})`);
+      saveAppState();
+      renderDashboardStats();
+      renderDashboardLogs();
+      renderRekapTable();
+      closeModalSimulator();
+
+      if (isValid) {
+        showToast(`Presensi berhasil: ${p.nama} di ${pos.nama} (VALID: ${jarak}m)`, 'success');
+      } else {
+        showToast(`Presensi ditolak: ${p.nama} di luar radius (${jarak}m > ${pos.radius}m)`, 'error');
+      }
+    }
+
+    // ==========================================
+    // MODAL: VIEW SELFIE & TOAST NOTIFICATION
+    // ==========================================
+    function viewSelfie(url, name, time) {
+      document.getElementById('modalSelfieImg').src = url || 'https://via.placeholder.com/300?text=Foto+Selfie';
+      document.getElementById('modalSelfieName').textContent = name;
+      document.getElementById('modalSelfieTime').textContent = 'Waktu Rekam: ' + time;
+      document.getElementById('modalSelfie').classList.remove('hidden');
+    }
+
+    function closeModalSelfie() {
+      document.getElementById('modalSelfie').classList.add('hidden');
+    }
+
+    function showToast(message, type = 'success') {
+      const toast = document.getElementById('toastNotification');
+      const msgEl = document.getElementById('toastMessage');
+      const icon = document.getElementById('toastIcon');
+
+      msgEl.textContent = message;
+      if (type === 'error') {
+        icon.className = 'fa-solid fa-circle-exclamation text-red-400 text-base';
+      } else if (type === 'info') {
+        icon.className = 'fa-solid fa-circle-info text-blue-400 text-base';
+      } else {
+        icon.className = 'fa-solid fa-circle-check text-emerald-400 text-base';
+      }
+
+      toast.classList.remove('translate-y-20', 'opacity-0', 'pointer-events-none');
+      setTimeout(() => {
+        toast.classList.add('translate-y-20', 'opacity-0', 'pointer-events-none');
+      }, 3500);
+    }
+
+    // ==========================================
+    // MODUL: SUPABASE CLOUD DATABASE SYNC ENGINE
+    // ==========================================
+    const DEFAULT_SUPABASE_URL = 'https://bvwytjegsajxuhztlqfw.supabase.co';
+    const DEFAULT_SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ2d3l0amVnc2FqeHVoenRscWZ3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk5NzE4NzksImV4cCI6MjEwNTU0Nzg3OX0.EQM9pr1qu0giDfep0Youm9rqdcPM3hcP1mRfLaI72pY';
+
+    let storedSupabaseConfig = JSON.parse(localStorage.getItem('damkar_supabase_config')) || {};
+    let supabaseConfig = {
+      url: storedSupabaseConfig.url || DEFAULT_SUPABASE_URL,
+      key: storedSupabaseConfig.key || DEFAULT_SUPABASE_KEY,
+      connected: storedSupabaseConfig.connected ?? true
+    };
+    // Persist default config
+    localStorage.setItem('damkar_supabase_config', JSON.stringify(supabaseConfig));
+
+    const SUPABASE_SCHEMA_SQL_CODE = `-- =========================================================================
+-- SKRIP MIGRASI DATABASE SUPABASE (POSTGRESQL)
+-- SISTEM PRESENSI DAMKAR SUBANG (YUDHA BRAMA JAYA)
+-- =========================================================================
+CREATE TABLE IF NOT EXISTS pos_sektor (
+    id TEXT PRIMARY KEY,
+    nama TEXT NOT NULL,
+    alamat TEXT DEFAULT '',
+    lat DOUBLE PRECISION NOT NULL,
+    lng DOUBLE PRECISION NOT NULL,
+    radius INTEGER NOT NULL DEFAULT 100,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS personel (
+    id TEXT PRIMARY KEY,
+    nip TEXT UNIQUE NOT NULL,
+    nama TEXT NOT NULL,
+    jabatan TEXT DEFAULT 'Personel Damkar',
+    unit_induk TEXT DEFAULT 'Mako Damkar Pusat Subang',
+    role TEXT DEFAULT 'Pegawai',
+    password_hash TEXT,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS personel_pos_penugasan (
+    personel_id TEXT NOT NULL REFERENCES personel(id) ON DELETE CASCADE,
+    pos_id TEXT NOT NULL REFERENCES pos_sektor(id) ON DELETE CASCADE,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    PRIMARY KEY (personel_id, pos_id)
+);
+
+CREATE TABLE IF NOT EXISTS presensi_log (
+    id TEXT PRIMARY KEY,
+    tanggal DATE NOT NULL DEFAULT CURRENT_DATE,
+    waktu TEXT NOT NULL,
+    user_id TEXT,
+    user_nip TEXT NOT NULL,
+    user_nama TEXT NOT NULL,
+    pos_id TEXT REFERENCES pos_sektor(id) ON DELETE SET NULL,
+    pos_nama TEXT NOT NULL,
+    latitude DOUBLE PRECISION,
+    longitude DOUBLE PRECISION,
+    jarak_meter INTEGER NOT NULL,
+    radius_izin INTEGER NOT NULL,
+    status TEXT NOT NULL,
+    status_kehadiran TEXT DEFAULT 'Hadir Tepat Waktu',
+    keterangan TEXT,
+    foto_selfie_url TEXT,
+    sync_status TEXT DEFAULT 'SYNCED',
+    is_mock_gps BOOLEAN DEFAULT FALSE,
+    is_rooted BOOLEAN DEFAULT FALSE,
+    integrity_signature TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS audit_log (
+    id TEXT PRIMARY KEY,
+    waktu TIMESTAMPTZ DEFAULT NOW(),
+    user_actor TEXT NOT NULL,
+    aksi TEXT NOT NULL,
+    detail TEXT NOT NULL,
+    ip_address TEXT DEFAULT '127.0.0.1'
+);
+
+ALTER TABLE pos_sektor ENABLE ROW LEVEL SECURITY;
+ALTER TABLE personel ENABLE ROW LEVEL SECURITY;
+ALTER TABLE personel_pos_penugasan ENABLE ROW LEVEL SECURITY;
+ALTER TABLE presensi_log ENABLE ROW LEVEL SECURITY;
+ALTER TABLE audit_log ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Allow All pos_sektor" ON pos_sektor FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow All personel" ON personel FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow All penugasan" ON personel_pos_penugasan FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow All presensi" ON presensi_log FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow All audit" ON audit_log FOR ALL USING (true) WITH CHECK (true);
+`;
+
+    function appendSupabaseLog(msg) {
+      const box = document.getElementById('supabaseSyncLogBox');
+      if (!box) return;
+      const now = new Date().toLocaleTimeString('id-ID');
+      box.innerHTML += `\n[${now}] ${msg}`;
+      box.scrollTop = box.scrollHeight;
+    }
+
+    function updateSupabaseStatusUI() {
+      const dot = document.getElementById('supabaseStatusDot');
+      const text = document.getElementById('supabaseStatusText');
+      const headerBadge = document.getElementById('supabaseHeaderBadge');
+
+      if (supabaseConfig.url && supabaseConfig.key && supabaseConfig.connected) {
+        if (dot) { dot.className = 'w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse'; }
+        if (text) { text.textContent = 'Terhubung ke Supabase Cloud: ' + new URL(supabaseConfig.url).hostname; }
+        if (headerBadge) { headerBadge.className = 'w-2 h-2 rounded-full bg-emerald-400'; }
+      } else if (supabaseConfig.url && supabaseConfig.key) {
+        if (dot) { dot.className = 'w-2.5 h-2.5 rounded-full bg-blue-500'; }
+        if (text) { text.textContent = 'Kredensial Tersimpan (Belum Diverifikasi)'; }
+        if (headerBadge) { headerBadge.className = 'w-2 h-2 rounded-full bg-blue-400'; }
+      } else {
+        if (dot) { dot.className = 'w-2.5 h-2.5 rounded-full bg-amber-400'; }
+        if (text) { text.textContent = 'Mode Penyimpanan Lokal (Belum Terkoneksi Supabase)'; }
+        if (headerBadge) { headerBadge.className = 'w-2 h-2 rounded-full bg-amber-400'; }
+      }
+    }
+
+    async function autoInitSupabase() {
+      if (!supabaseConfig.url || !supabaseConfig.key) return;
+      try {
+        const res = await fetch(`${supabaseConfig.url}/rest/v1/pos_sektor?select=id&limit=1`, {
+          method: 'GET',
+          headers: {
+            'apikey': supabaseConfig.key,
+            'Authorization': `Bearer ${supabaseConfig.key}`
+          }
+        });
+        if (res.ok) {
+          supabaseConfig.connected = true;
+          localStorage.setItem('damkar_supabase_config', JSON.stringify(supabaseConfig));
+          updateSupabaseStatusUI();
+          appendSupabaseLog('Terhubung secara otomatis ke Supabase (' + new URL(supabaseConfig.url).hostname + ').');
+        }
+      } catch (e) {
+        console.warn('Auto-init Supabase offline or pending network:', e);
+      }
+    }
+
+    function openModalSupabase() {
+      document.getElementById('inputSupabaseUrl').value = supabaseConfig.url || '';
+      document.getElementById('inputSupabaseKey').value = supabaseConfig.key || '';
+      updateSupabaseStatusUI();
+      document.getElementById('modalSupabase').classList.remove('hidden');
+    }
+
+    function closeModalSupabase() {
+      document.getElementById('modalSupabase').classList.add('hidden');
+    }
+
+    function saveSupabaseConfig() {
+      const url = document.getElementById('inputSupabaseUrl').value.trim().replace(/\/$/, '');
+      const key = document.getElementById('inputSupabaseKey').value.trim();
+
+      if (!url || !key) {
+        showToast('Harap masukkan URL dan Anon Key Supabase!', 'error');
+        return;
+      }
+
+      supabaseConfig.url = url;
+      supabaseConfig.key = key;
+      localStorage.setItem('damkar_supabase_config', JSON.stringify(supabaseConfig));
+      updateSupabaseStatusUI();
+      appendSupabaseLog('Pengaturan Supabase disimpan.');
+      showToast('Kredensial Supabase berhasil disimpan!', 'success');
+    }
+
+    async function testSupabaseConnection() {
+      saveSupabaseConfig();
+      const { url, key } = supabaseConfig;
+      if (!url || !key) return;
+
+      appendSupabaseLog('Menguji koneksi ke ' + url + '...');
+      try {
+        const res = await fetch(`${url}/rest/v1/pos_sektor?select=id&limit=1`, {
+          method: 'GET',
+          headers: {
+            'apikey': key,
+            'Authorization': `Bearer ${key}`
+          }
+        });
+
+        if (res.ok) {
+          supabaseConfig.connected = true;
+          localStorage.setItem('damkar_supabase_config', JSON.stringify(supabaseConfig));
+          updateSupabaseStatusUI();
+          appendSupabaseLog('Sukses! Koneksi REST API ke tabel Supabase pos_sektor valid.');
+          showToast('Koneksi ke Supabase Berhasil Terhubung!', 'success');
+          addAuditEntry('Koneksi Supabase', 'Koneksi ke database cloud Supabase terverifikasi');
+        } else {
+          const errText = await res.text();
+          supabaseConfig.connected = false;
+          updateSupabaseStatusUI();
+          appendSupabaseLog('Koneksi Gagal (' + res.status + '): ' + errText);
+          showToast('Gagal terhubung: Pastikan skrip SQL sudah dijalankan di Supabase!', 'error');
+        }
+      } catch (err) {
+        supabaseConfig.connected = false;
+        updateSupabaseStatusUI();
+        appendSupabaseLog('Error Jaringan: ' + err.message);
+        showToast('Koneksi error: ' + err.message, 'error');
+      }
+    }
+
+    async function syncLocalToSupabase() {
+      const { url, key } = supabaseConfig;
+      if (!url || !key) {
+        showToast('Harap atur URL dan Key Supabase terlebih dahulu!', 'error');
+        openModalSupabase();
+        return;
+      }
+
+      appendSupabaseLog('Memulai sinkronisasi data lokal ke Supabase...');
+      showToast('Sedang mengunggah data ke Supabase...', 'info');
+
+      try {
+        const headers = {
+          'apikey': key,
+          'Authorization': `Bearer ${key}`,
+          'Content-Type': 'application/json',
+          'Prefer': 'resolution=merge-duplicates'
+        };
+
+        // 1. Sinkronisasi Pos Sektor
+        appendSupabaseLog('1/5 Mengunggah ' + appState.posList.length + ' data Pos Sektor...');
+        const resPos = await fetch(`${url}/rest/v1/pos_sektor`, {
+          method: 'POST',
+          headers: headers,
+          body: JSON.stringify(appState.posList.map(p => ({
+            id: p.id,
+            nama: p.nama,
+            alamat: p.alamat || '',
+            lat: p.lat,
+            lng: p.lng,
+            radius: p.radius
+          })))
+        });
+        if (!resPos.ok) throw new Error('Gagal unggah pos_sektor: ' + (await resPos.text()));
+
+        // 2. Sinkronisasi Personel
+        appendSupabaseLog('2/5 Mengunggah ' + appState.personelList.length + ' data Personel...');
+        const resPer = await fetch(`${url}/rest/v1/personel`, {
+          method: 'POST',
+          headers: headers,
+          body: JSON.stringify(appState.personelList.map(p => ({
+            id: p.id,
+            nip: p.nip,
+            nama: p.nama,
+            jabatan: p.jabatan || 'Personel Damkar',
+            unit_induk: p.unit || 'Mako Damkar Pusat Subang',
+            role: p.role || 'Pegawai'
+          })))
+        });
+        if (!resPer.ok) throw new Error('Gagal unggah personel: ' + (await resPer.text()));
+
+        // 3. Sinkronisasi Penugasan Multi-Lokasi
+        const penugasanRows = [];
+        appState.personelList.forEach(p => {
+          (p.posIds || []).forEach(posId => {
+            penugasanRows.push({ personel_id: p.id, pos_id: posId });
+          });
+        });
+        if (penugasanRows.length > 0) {
+          appendSupabaseLog('3/5 Mengunggah ' + penugasanRows.length + ' matriks penugasan...');
+          const resMap = await fetch(`${url}/rest/v1/personel_pos_penugasan`, {
+            method: 'POST',
+            headers: headers,
+            body: JSON.stringify(penugasanRows)
+          });
+          if (!resMap.ok) throw new Error('Gagal unggah penugasan: ' + (await resMap.text()));
+        }
+
+        // 4. Sinkronisasi Presensi Log
+        if (appState.logsList.length > 0) {
+          appendSupabaseLog('4/5 Mengunggah ' + appState.logsList.length + ' data riwayat presensi...');
+          const resLogs = await fetch(`${url}/rest/v1/presensi_log`, {
+            method: 'POST',
+            headers: headers,
+            body: JSON.stringify(appState.logsList.map(l => ({
+              id: l.id,
+              tanggal: l.tanggal || new Date().toISOString().split('T')[0],
+              waktu: l.waktu,
+              user_nip: l.personelNip,
+              user_nama: l.personelNama,
+              pos_nama: l.posNama,
+              jarak_meter: l.jarak || 0,
+              radius_izin: l.radius || 100,
+              status: l.status,
+              foto_selfie_url: l.selfieUrl || '',
+              sync_status: 'SYNCED'
+            })))
+          });
+          if (!resLogs.ok) throw new Error('Gagal unggah presensi_log: ' + (await resLogs.text()));
+        }
+
+        // 5. Sinkronisasi Audit Log
+        if (appState.auditList.length > 0) {
+          appendSupabaseLog('5/5 Mengunggah data audit log...');
+          await fetch(`${url}/rest/v1/audit_log`, {
+            method: 'POST',
+            headers: headers,
+            body: JSON.stringify(appState.auditList.map(a => ({
+              id: a.id,
+              user_actor: a.user,
+              aksi: a.aksi,
+              detail: a.detail
+            })))
+          });
+        }
+
+        appendSupabaseLog('SUKSES: Seluruh data lokal berhasil disinkronkan ke Supabase!');
+        supabaseConfig.connected = true;
+        updateSupabaseStatusUI();
+        showToast('Sinkronisasi ke Supabase Berhasil 100%!', 'success');
+        addAuditEntry('Sinkron Supabase', 'Unggah data lokal ke Supabase PostgreSQL berhasil');
+      } catch (err) {
+        appendSupabaseLog('ERROR Sinkron: ' + err.message);
+        showToast('Sinkronisasi gagal: ' + err.message, 'error');
+      }
+    }
+
+    async function syncSupabaseToLocal() {
+      const { url, key } = supabaseConfig;
+      if (!url || !key) {
+        showToast('Harap atur URL dan Key Supabase terlebih dahulu!', 'error');
+        openModalSupabase();
+        return;
+      }
+
+      appendSupabaseLog('Menarik data dari Supabase ke penyimpanan lokal...');
+      showToast('Mengunduh data terbaru dari Supabase...', 'info');
+
+      try {
+        const headers = {
+          'apikey': key,
+          'Authorization': `Bearer ${key}`
+        };
+
+        // 1. Tarik Pos Sektor
+        const resPos = await fetch(`${url}/rest/v1/pos_sektor?select=*`, { headers });
+        if (!resPos.ok) throw new Error('Gagal unduh pos: ' + (await resPos.text()));
+        const cloudPos = await resPos.json();
+
+        // 2. Tarik Personel
+        const resPer = await fetch(`${url}/rest/v1/personel?select=*`, { headers });
+        if (!resPer.ok) throw new Error('Gagal unduh personel: ' + (await resPer.text()));
+        const cloudPer = await resPer.json();
+
+        // 3. Tarik Matriks Penugasan
+        const resMap = await fetch(`${url}/rest/v1/personel_pos_penugasan?select=*`, { headers });
+        const cloudMap = resMap.ok ? await resMap.json() : [];
+
+        // Gabungkan penugasan pos ke personel
+        const mappedPersonel = cloudPer.map(p => {
+          const posIds = cloudMap.filter(m => m.personel_id === p.id).map(m => m.pos_id);
+          return {
+            id: p.id,
+            nip: p.nip,
+            nama: p.nama,
+            jabatan: p.jabatan,
+            unit: p.unit_induk,
+            role: p.role,
+            posIds: posIds
+          };
+        });
+
+        // 4. Tarik Presensi Log
+        const resLogs = await fetch(`${url}/rest/v1/presensi_log?select=*&order=created_at.desc&limit=100`, { headers });
+        const cloudLogs = resLogs.ok ? await resLogs.json() : [];
+
+        const mappedLogs = cloudLogs.map(l => ({
+          id: l.id,
+          tanggal: l.tanggal,
+          waktu: l.waktu,
+          personelNama: l.user_nama,
+          personelNip: l.user_nip,
+          posNama: l.pos_nama,
+          jarak: l.jarak_meter,
+          radius: l.radius_izin,
+          status: l.status,
+          selfieUrl: l.foto_selfie_url
+        }));
+
+        if (cloudPos.length > 0) appState.posList = cloudPos;
+        if (mappedPersonel.length > 0) appState.personelList = mappedPersonel;
+        if (mappedLogs.length > 0) appState.logsList = mappedLogs;
+
+        saveAppState();
+        renderDashboardStats();
+        renderDashboardLogs();
+        renderPosTable();
+        renderPersonelTable();
+        renderRekapTable();
+        updateDashboardMapMarkers();
+        populateRekapPosDropdown();
+
+        appendSupabaseLog(`SUKSES: Diperbarui ${cloudPos.length} pos, ${mappedPersonel.length} personel, ${mappedLogs.length} riwayat.`);
+        showToast('Data berhasil diperbarui dari Supabase!', 'success');
+        addAuditEntry('Tarik Data Supabase', 'Pembaruan data lokal dari Supabase selesai');
+      } catch (err) {
+        appendSupabaseLog('ERROR Tarik Data: ' + err.message);
+        showToast('Gagal menarik data: ' + err.message, 'error');
+      }
+    }
+
+    function openModalSqlViewer() {
+      document.getElementById('supabaseSqlTextarea').value = SUPABASE_SCHEMA_SQL_CODE;
+      document.getElementById('modalSqlViewer').classList.remove('hidden');
+    }
+
+    function closeModalSqlViewer() {
+      document.getElementById('modalSqlViewer').classList.add('hidden');
+    }
+
+    function copySupabaseSql() {
+      const textarea = document.getElementById('supabaseSqlTextarea');
+      textarea.select();
+      navigator.clipboard.writeText(textarea.value).then(() => {
+        showToast('Kode SQL berhasil disalin ke clipboard!', 'success');
+      }).catch(() => {
+        showToast('Gagal menyalin, silakan salin teks secara manual.', 'error');
+      });
+    }
+  </script>
+</body>
+</html>

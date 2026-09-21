@@ -54,6 +54,20 @@ fun AdminWebDashboardScreen(
                     }
                 },
                 actions = {
+                    IconButton(onClick = {
+                        try {
+                            val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse("https://ais-dev-njcruqr27mw3w5c3euzk74-131882773053.asia-southeast1.run.app"))
+                            context.startActivity(browserIntent)
+                        } catch (e: Exception) {
+                            // Fallback if no browser
+                        }
+                    }) {
+                        Icon(
+                            imageVector = Icons.Default.OpenInBrowser,
+                            contentDescription = "Buka di Browser Eksternal",
+                            tint = Color.White
+                        )
+                    }
                     IconButton(onClick = { webViewInstance?.reload() }) {
                         Icon(
                             imageVector = Icons.Default.Refresh,
@@ -113,6 +127,19 @@ fun AdminWebDashboardScreen(
                             override fun onPageFinished(view: WebView?, url: String?) {
                                 super.onPageFinished(view, url)
                                 isLoading = false
+                            }
+
+                            override fun onReceivedError(
+                                view: WebView?,
+                                errorCode: Int,
+                                description: String?,
+                                failingUrl: String?
+                            ) {
+                                super.onReceivedError(view, errorCode, description, failingUrl)
+                                isLoading = false
+                                if (failingUrl?.contains("admin_dashboard.html") == true) {
+                                    view?.loadUrl("file:///android_asset/index.html")
+                                }
                             }
                         }
 

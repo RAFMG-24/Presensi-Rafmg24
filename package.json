@@ -1,0 +1,10 @@
+{
+  "name": "presensi-damkar-subang-web",
+  "version": "1.0.0",
+  "description": "Web Dashboard Superadmin - Presensi Damkar Subang (Yudha Brama Jaya)",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  }
+}
